@@ -9,6 +9,7 @@ struct DecodedIns {
 	std::string to_string();
 
 	Instruction type = Instruction::ILLEGAL;
+	uint16_t bincode = 0;
 	uint16_t addr = 0;
 	uint8_t vx = 0;
 	uint8_t vy = 0;

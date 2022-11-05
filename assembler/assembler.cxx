@@ -38,7 +38,7 @@ static std::map<string_view, uint16_t> INS_OPCODE_MAP = {
 	{"SKPv", 0xE09E},    {"SKNPv", 0xE0A1},   {"LDv,DT", 0xF007},
 	{"LDv,K", 0xF00A},   {"LDDT,v", 0xF015},  {"LDST,v", 0xF018},
 	{"ADDI,v", 0xF01E},  {"LDF,v", 0xF029},   {"LDBv", 0xF033},
-	{"LD[I]_v", 0xF055}, {"LDv,[I]", 0xF065},
+	{"LD[I],v", 0xF055}, {"LDv,[I]", 0xF065},
 };
 // static constexpr int INS_INFO_MAX_LEN = 8;
 

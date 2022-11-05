@@ -29,6 +29,7 @@ DecodedIns::DecodedIns(uint16_t ins)
 	// oooo xxxx yyyy nnnn
 	// Symbols: x - Vx,   y - Vy,     o - opcode
 	//          b - byte, n - nibble, a - address
+	bincode = ins;
 	vx = getbits(ins, C8_VX_OFFSET, 4);
 	vy = getbits(ins, C8_VY_OFFSET, 4);
 	addr = getbits(ins, 0, 12);
@@ -60,7 +61,7 @@ DecodedIns::DecodedIns(uint16_t ins)
 		type = I::SNE_v_b;
 		break;
 	case 0x5:
-		type = I::SNE_v_v;
+		type = I::SE_v_v;
 		break;
 	case 0x6:
 		type = I::LD_v_b;
@@ -135,6 +136,8 @@ DecodedIns::DecodedIns(uint16_t ins)
 
 string DecodedIns::to_string()
 {
+	if (type == Instruction::ILLEGAL)
+		return "<! ILLEGAL !>";
 	string ret;
 	return std::string(INSTRUCTIONS[static_cast<int>(type)]);
 }
