@@ -14,11 +14,5 @@ add_executable(c8emu "chip8/main.cxx" "chip8/emulator.cxx" "chip8/decoder.cxx")
 target_link_libraries(c8emu raylib)
 
 add_executable(c8asm "assembler/main.cxx")
-target_link_libraries(c8asm fmt)
+target_link_libraries(c8asm)
 
-# Start testing
-include(CTest)
-# add_executable(test-modname tests/test-modname.c)
-# target_link_libraries(test-modname modname)
-# add_test(NAME "test-modname" COMMAND test-modname)
-# set_tests_properties(test-modname PROPERTIES TIMEOUT 5)

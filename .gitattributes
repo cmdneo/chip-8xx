@@ -1,1 +1,3 @@
 *.bin.h binary
+*.bin.h linguist-generated=true
+
