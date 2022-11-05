@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <iostream>
 #include <algorithm>
 #include <array>
 #include <bitset>
@@ -8,7 +9,6 @@
 #include "chip8.hxx"
 #include "emulator.hxx"
 #include "decoder.hxx"
-#include "logger.hxx"
 
 using std::array;
 using std::begin;
@@ -26,12 +26,12 @@ static array<uint8_t, 3> bcd_encode(uint8_t x)
 	return {p100, p10, p1};
 }
 
-Logger Emulator::log("Emulator");
-
-Emulator::Emulator(const std::vector<uint8_t> &rom)
+Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 {
-	if (rom.size() > C8_RAM_SIZE - C8_PROG_START) {
-		log("ROM size too big", "ERROR");
+	constexpr auto rom_max = C8_RAM_SIZE - C8_PROG_START;
+	if (rom_end - rom_beg > rom_max) {
+		std::clog << "Emulator: ERROR: ROM size too big!\n "
+				  << "Maximum is " << rom_max << "\n";
 		error = true;
 		return;
 	}
@@ -43,7 +43,7 @@ Emulator::Emulator(const std::vector<uint8_t> &rom)
 	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
 	copy(fontp, fontp + sizeof(FONT_SPRITES), ram);
 	// Load program
-	copy(rom.begin(), rom.end(), ram + C8_PROG_START);
+	copy(rom_beg, rom_end, ram + C8_PROG_START);
 }
 
 bool Emulator::step()
@@ -259,13 +259,13 @@ void Emulator::draw_sprite(uint8_t x, uint8_t y, uint8_t height)
 			auto xf = (x + j) % C8_SCREEN_WIDTH;
 			// MSB to LSB - Left to right
 			uint8_t tmp = screen[yf][xf] ^ ((ram[index + i] >> (7 - j)) & 1);
-			collision = screen[yf][xf] && !tmp;
+			if (screen[yf][xf] && !tmp)
+				collision = true;
 			screen[yf][xf] = tmp;
 		}
 	}
 
-	if (collision)
-		regs[C8_FLAG_REG] = 1;
+	regs[C8_FLAG_REG] = collision;
 }
 
 void Emulator::update_timers(double dt)
@@ -278,4 +278,12 @@ void Emulator::update_timers(double dt)
 		dtimer -= dt * C8_TIMER_FREQ;
 	else
 		dtimer = 0;
+}
+
+uint8_t Emulator::add_with_ovf(uint8_t a, uint8_t b)
+{
+	// Usigned overflow is well-defined in C++
+	auto s = a + b;
+	regs[C8_FLAG_REG] = s < a || s < b;
+	return s;
 }
