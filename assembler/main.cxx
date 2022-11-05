@@ -13,7 +13,6 @@
 #include <optional>
 
 #include "chip8.hxx"
-#include "logger.hxx"
 #include "scanner.hxx"
 
 using std::begin;
@@ -50,6 +49,8 @@ struct Statement {
 	uint8_t vy = 0;
 	string label;
 	int line = 0;
+	// For db(data byte) directive
+	bool is_db = false;
 };
 
 enum class Tok {
@@ -62,8 +63,6 @@ enum class Tok {
 	CHAR,
 };
 
-using I = Instruction;
-
 // Parser state Globals
 static Scanner scanner("");
 
@@ -72,6 +71,7 @@ static string identifier;
 static Directive directive;
 static char character;
 static int error_count = 0;
+static std::map<string, string> define_map;
 
 #define LOG_ERR_GET(err_msg, val) (log_err((err_msg)), (val));
 
@@ -116,7 +116,7 @@ static Tok parse_int()
 	number = 0;
 
 	if (scanner.first() == '0') {
-		char sec = std::toupper(scanner.second().value_or('0'));
+		char sec = scanner.second().value_or('0');
 		if (sec == 'X')
 			base = 16;
 		else if (sec == 'B')
@@ -157,9 +157,12 @@ static Tok parse_ident()
 	while (auto c = scanner.first()) {
 		if (!is_ident_char(*c))
 			break;
-		identifier += std::toupper(*c);
+		identifier += *c;
 		scanner.skip();
 	}
+	auto search = define_map.find(identifier);
+	if (search != define_map.end())
+		identifier = search->second;
 
 	int idx = 0;
 	idx = index_of_sv(begin(INSTRUCTIONS), end(INSTRUCTIONS), identifier);
@@ -233,8 +236,10 @@ static optional<Statement> parse_ins()
 			ret.opcode = search->second;
 			return ret;
 		}
-		if (!is_ins_info_valid(ins_info))
+		if (!is_ins_info_valid(ins_info)) {
+			// std::clog << ins_info << "\n";
 			return LOG_ERR_GET("Illegal Token", nullopt);
+		}
 
 		switch (next_token()) {
 		// Terminal token
@@ -258,8 +263,9 @@ static optional<Statement> parse_ins()
 			break;
 
 		case Tok::IDENT:
-			// Only Jump and call can have labels
-			if (ins_info == "JP" || ins_info == "JPV0," || ins_info == "CALL") {
+			// JP addr; JP V0, addr; CALL addr; LD I, addr; can have labels
+			if (ins_info == "JP" || ins_info == "JPV0," || ins_info == "CALL"
+				|| ins_info == "LDI,") {
 				ins_info += 'a';
 				ret.label = identifier;
 			} else {
@@ -299,11 +305,33 @@ static optional<Statement> parse_ins()
 	return LOG_ERR_GET("This should not happen", nullopt);
 }
 
-static inline bool is_reserved_name(string_view name)
+static bool parse_define()
+{
+	string alias, subst;
+	if (next_token() != Tok::IDENT)
+		return LOG_ERR_GET("Identifier expected after define", false);
+	alias = identifier;
+
+	scanner.skip_while([](char c) { return !!std::isblank(c); });
+	while (auto c = scanner.first()) {
+		if (std::isspace(*c) || c == ';')
+			break;
+		subst += *c;
+		scanner.skip();
+	}
+
+	if (subst.empty())
+		return LOG_ERR_GET("Alias expected after name", false);
+	define_map[alias] = subst;
+
+	return true;
+}
+
+static inline bool is_reserved_name(string_view s)
 {
 	// Name of internal registers(non V's) used assembly
-	return identifier == "F" || identifier == "B" || identifier == "I"
-		   || identifier == "K" || identifier == "DT" || identifier == "ST";
+	return s == "F" || s == "B" || s == "I" || s == "K" || s == "DT"
+		   || s == "ST";
 }
 
 static optional<vector<uint8_t>> parse_and_assemble()
@@ -336,13 +364,10 @@ static optional<vector<uint8_t>> parse_and_assemble()
 				);
 			}
 			tok = next_token();
-			if (tok == Tok::CHAR && character == ':') {
-				if (!label_map.insert({identifier, label_addr}).second)
-					return LOG_ERR_GET("Duplicate label defined", nullopt);
-
-			} else {
+			if (!(tok == Tok::CHAR && character == ':'))
 				return LOG_ERR_GET("Colon expected after label name", nullopt);
-			}
+			if (!label_map.insert({identifier, label_addr}).second)
+				return LOG_ERR_GET("Duplicate label defined", nullopt);
 			break;
 
 		case Tok::REG:
@@ -350,7 +375,23 @@ static optional<vector<uint8_t>> parse_and_assemble()
 			break;
 
 		case Tok::DIR:
-			// TODO
+			using D = Directive;
+			if (directive == D::DB) {
+				if (next_token() != Tok::NUM)
+					return LOG_ERR_GET("Number expected after DB", nullopt);
+				if (number > C8_BYTE_MAX)
+					return LOG_ERR_GET("Number too big(>255) ", nullopt);
+				if (!(next_token() == Tok::CHAR && character == '\n'))
+					return LOG_ERR_GET("Newline expected", nullopt);
+				Statement stmt{};
+				stmt.is_db = true;
+				stmt.imm = number;
+				statements.push_back(stmt);
+				label_addr++;
+			} else if (directive == D::DEFINE) {
+				if (!parse_define())
+					return nullopt;
+			}
 			break;
 
 		case Tok::INS:
@@ -363,7 +404,7 @@ static optional<vector<uint8_t>> parse_and_assemble()
 			break;
 
 		case Tok::CHAR:
-			// Ignore extra white space // and control characters
+			// Ignore extra white space
 			if (!std::isspace(character))
 				return LOG_ERR_GET("Illegal character", nullopt);
 			break;
@@ -371,8 +412,8 @@ static optional<vector<uint8_t>> parse_and_assemble()
 	}
 
 	for (auto &stmt : statements) {
-		if (false) {
-			bincode.push_back(stmt.imm);
+		if (stmt.is_db) {
+			bincode.push_back(stmt.imm & 0xFF);
 			continue;
 		}
 		if (!stmt.label.empty()) {
@@ -393,12 +434,12 @@ static optional<vector<uint8_t>> parse_and_assemble()
 	return bincode;
 }
 
-static string read_to_string(std::ifstream &file)
+static string read_to_uppercase_string(std::ifstream &file)
 {
 	string ret;
 	char c;
 	while (file.get(c))
-		ret += c;
+		ret += std::toupper(c);
 
 	return ret;
 }
@@ -417,7 +458,7 @@ int main(int argc, char const **argv)
 		return 1;
 	}
 
-	const string code = read_to_string(infile);
+	const string code = read_to_uppercase_string(infile); // Case-insesetive
 	scanner = Scanner(code);
 	auto bincode = parse_and_assemble();
 	if (!bincode) {

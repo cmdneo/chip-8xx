@@ -9,7 +9,6 @@ class Scanner
 public:
 	Scanner(std::string_view s)
 		: txt(s)
-		, original(s)
 	{
 		if (!txt.empty())
 			cur = txt[0];
@@ -55,18 +54,9 @@ public:
 		}
 		return cnt;
 	}
-	// void reset()
-	// {
-	// 	txt = original;
-	// 	line_num = 0;
-	// 	pre = {};
-	// 	if (!txt.empty())
-	// 		cur = txt[0];
-	// }
 
 private:
 	std::string_view txt;
-	std::string_view original;
 	std::optional<char> cur = {};
 	std::optional<char> pre = {};
 	int line_num = 0;

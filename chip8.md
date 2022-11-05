@@ -66,8 +66,24 @@ __^__ : Sets carry flag (`VF` register)
 Directives
 ---
 
-| Directive | Function                                   |
-| --------- | ------------------------------------------ |
-| `db byte` | Puts a byte at the current memory location |
+| Directive            | Function                                   |
+| -------------------- | ------------------------------------------ |
+| `db byte`            | Puts a byte at the current memory location |
+| `define alias subst` | Dumb Textual replacement(see below)        |
+
+For `define` directive alias should be identifier and subst can any token.
 
 **WARNING**: If instructions are not aligned by 2-bytes then the behaviour is undefined. So when using `db` directive put even number of bytes, preferably at the end of the file.
+
+
+Key mapping
+-----------
+
+	Original C8 keys     Mapped to keys
+	|---|---|---|---|    |---|---|---|---|
+	| 1 | 2 | 3 | C |    | 1 | 2 | 3 | 4 |
+	| 4 | 5 | 6 | D |    | Q | W | E | R |
+	| 7 | 8 | 9 | E |    | A | S | D | F |
+	| A | 0 | B | F |    | Z | X | C | V |
+	|---|---|---|---|    |---|---|---|---|
+
