@@ -154,12 +154,7 @@ index_of_sv(const string_view *b, const string_view *e, string_view item)
 static Tok parse_ident()
 {
 	identifier.clear();
-	while (auto c = scanner.first()) {
-		if (!is_ident_char(*c))
-			break;
-		identifier += *c;
-		scanner.skip();
-	}
+	identifier = string(scanner.skip_while(is_ident_char));
 	auto search = define_map.find(identifier);
 	if (search != define_map.end())
 		identifier = search->second;
@@ -305,33 +300,31 @@ static optional<Statement> parse_ins()
 	return LOG_ERR_GET("This should not happen", nullopt);
 }
 
-static bool parse_define()
-{
-	string alias, subst;
-	if (next_token() != Tok::IDENT)
-		return LOG_ERR_GET("Identifier expected after define", false);
-	alias = identifier;
-
-	scanner.skip_while([](char c) { return !!std::isblank(c); });
-	while (auto c = scanner.first()) {
-		if (std::isspace(*c) || c == ';')
-			break;
-		subst += *c;
-		scanner.skip();
-	}
-
-	if (subst.empty())
-		return LOG_ERR_GET("Alias expected after name", false);
-	define_map[alias] = subst;
-
-	return true;
-}
-
 static inline bool is_reserved_name(string_view s)
 {
-	// Name of internal registers(non V's) used assembly
+	// Name of internal registers(non V's) used by assembly
 	return s == "F" || s == "B" || s == "I" || s == "K" || s == "DT"
 		   || s == "ST";
+}
+
+static bool parse_define()
+{
+	if (next_token() != Tok::IDENT)
+		return LOG_ERR_GET("Identifier expected after define", false);
+	if (is_reserved_name(identifier))
+		return LOG_ERR_GET("define alias cannot be a reserved name", false);
+
+	string alias = identifier;
+
+	scanner.skip_while([](char c) { return !!std::isblank(c); });
+	string subst(scanner.skip_while(is_ident_char));
+	if (subst.empty())
+		return LOG_ERR_GET("Subsitution name expected after alias", false);
+	if (!(next_token() == Tok::CHAR && character == '\n'))
+		return LOG_ERR_GET("Newline expected", false);
+
+	define_map[alias] = subst;
+	return true;
 }
 
 static optional<vector<uint8_t>> parse_and_assemble()

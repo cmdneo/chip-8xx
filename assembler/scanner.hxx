@@ -43,8 +43,9 @@ public:
 			cur = txt.front();
 		}
 	}
-	int skip_while(auto(*pred)(char ch)->bool)
+	std::string_view skip_while(auto(*pred)(char ch)->bool)
 	{
+		auto ret = txt;
 		int cnt = 0;
 		while (auto c = first()) {
 			if (!pred(*c))
@@ -52,7 +53,7 @@ public:
 			cnt++;
 			skip();
 		}
-		return cnt;
+		return ret.substr(0, cnt);
 	}
 
 private:
