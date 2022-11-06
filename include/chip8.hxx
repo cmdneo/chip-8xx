@@ -21,7 +21,7 @@ enum Chip8Info {
 	C8_INS_LEN = 2,
 	C8_REG_CNT = 16,
 	C8_PROG_START = 0x200,
-	C8_STACK_HEIGHT = 16,
+	C8_STACK_SIZE = 16,
 	C8_RAM_SIZE = 4096,
 	C8_ADDR_MAX = C8_RAM_SIZE - 1,
 	C8_BYTE_MAX = 255,
@@ -132,44 +132,5 @@ static constexpr std::string_view DIRECTIVES[] = {
 	"DB",
 	"DEFINE",
 };
-
-// Some instructions have a fixed operand(internal registers names)
-// Like: LD DT, V0 ; where DT is a fixed operand
-// Returns that name or empty string if not applicable
-[[maybe_unused]] static std::string_view get_fixed_operand(Instruction ins)
-{
-	using I = Instruction;
-	switch (ins) {
-	case I::LD_B_v:
-		return "B";
-		break;
-	case I::LD_F_v:
-		return "F";
-		break;
-	case I::LD_v_K:
-		return "K";
-		break;
-	case I::LD_ST_v:
-		return "ST";
-		break;
-	case I::LD_DT_v:
-	case I::LD_v_DT:
-		return "DT";
-		break;
-	case I::LD_I_a:
-	case I::ADD_I_v:
-		return "I";
-		break;
-	case I::LD_IM_v:
-	case I::LD_v_IM:
-		return "[I]";
-		break;
-
-	default:
-		return "";
-		break;
-	}
-	return "";
-}
 
 #endif
