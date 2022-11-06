@@ -11,7 +11,7 @@ include_directories("${CMAKE_SOURCE_DIR}/include")
 # add_link_options(-fsanitize=address,undefined)
 
 add_executable(c8emu "chip8/main.cxx" "chip8/emulator.cxx" "chip8/decoder.cxx")
-target_link_libraries(c8emu raylib)
+target_link_libraries(c8emu raylib m)
 
 add_executable(c8asm "assembler/assembler.cxx")
 target_link_libraries(c8asm)

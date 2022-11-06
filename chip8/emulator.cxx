@@ -31,6 +31,7 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 	// Seed the random number generator
 	std::random_device rdev;
 	rand_gen.seed(rdev());
+	reset_clock();
 	// Copy fonts
 	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
 	copy(fontp, fontp + sizeof(FONT_SPRITES), ram);
@@ -55,14 +56,15 @@ bool Emulator::step()
 		}
 	}
 
+	// Wrap evey indexing variable around before accessing data from array
+	// to prevent out of bounds access
 	// Instructions are 2 bytes long(big-endian)
-	uint16_t bincode = (ram[pc] << 8) | ram[pc + 1];
+	uint16_t bincode = fetch_ins(pc % C8_RAM_SIZE);
 	DecodedIns ins(bincode);
 
 	// Reference to Values of registers
 	auto &vvx = regs[ins.vx];
 	auto &vvy = regs[ins.vy];
-	int copy_end_index = index + ins.vx + 1;
 
 	switch (ins.type) {
 	case I::CLS:
@@ -70,7 +72,7 @@ bool Emulator::step()
 		break;
 
 	case I::RET:
-		pc = stack[--sp];
+		pc = stack[--sp % C8_STACK_SIZE];
 		break;
 
 	case I::SYS_a:
@@ -82,9 +84,7 @@ bool Emulator::step()
 		break;
 
 	case I::CALL_a:
-		// Wrap sp, prevent out of bounds access
-		sp %= C8_STACK_HEIGHT;
-		stack[sp++] = pc + C8_INS_LEN;
+		stack[sp++ % C8_STACK_SIZE] = pc + C8_INS_LEN;
 		pc = ins.addr;
 		break;
 
@@ -207,21 +207,20 @@ bool Emulator::step()
 		break;
 
 	case I::LD_B_v:
-		if (index + 2 >= C8_RAM_SIZE)
-			break;
-		ram[index] = vvx / 100;
-		ram[index + 1] = (vvx % 100) / 10;
-		ram[index + 2] = vvx % 10;
+		// Instead of overflowing wrap around
+		ram[(index + 0) % C8_RAM_SIZE] = vvx / 100;
+		ram[(index + 1) % C8_RAM_SIZE] = (vvx % 100) / 10;
+		ram[(index + 2) % C8_RAM_SIZE] = vvx % 10;
 		break;
 
 	case I::LD_IM_v:
-		if (copy_end_index <= C8_RAM_SIZE)
-			copy(regs, regs + ins.vx + 1, ram + index);
+		for (unsigned i = 0; i <= ins.vx; ++i)
+			ram[(index + i) % C8_RAM_SIZE] = regs[i];
 		break;
 
 	case I::LD_v_IM:
-		if (copy_end_index <= C8_RAM_SIZE)
-			copy(ram + index, ram + copy_end_index, regs);
+		for (unsigned i = 0; i <= ins.vx; ++i)
+			regs[i] = ram[(index + i) % C8_RAM_SIZE];
 		break;
 
 	case I::ILLEGAL:
@@ -230,7 +229,7 @@ bool Emulator::step()
 	}
 
 	switch (ins.type) {
-	// For branches that are not skips and key_input instructions do nothing
+	// For branches(not single skips) and key_input instructions do nothing
 	case I::RET:
 	case I::JP_a:
 	case I::CALL_a:
@@ -240,9 +239,8 @@ bool Emulator::step()
 
 	default:
 		pc += C8_INS_LEN;
+		break;
 	}
-
-	pc %= C8_RAM_SIZE;
 
 	return true;
 }
@@ -255,7 +253,8 @@ void Emulator::draw_sprite(uint8_t x, uint8_t y, uint8_t height)
 		for (unsigned j = 0; j != 8; ++j) {
 			auto xf = (x + j) % C8_SCREEN_WIDTH;
 			// MSB to LSB - Left to right
-			uint8_t tmp = screen[yf][xf] ^ ((ram[index + i] >> (7 - j)) & 1);
+			auto bit = (ram[(index + i) % C8_RAM_SIZE] >> (7 - j)) & 1;
+			uint8_t tmp = screen[yf][xf] ^ bit;
 			if (screen[yf][xf] && !tmp)
 				collision = true;
 			screen[yf][xf] = tmp;
