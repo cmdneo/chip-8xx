@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "raylib/raylib.h"
 #include "decoder.hxx"
@@ -79,25 +80,23 @@ constexpr static Vector2 CONTROL_BOX = {0, 320};
 
 static void fmt_registers(const Emulator &emu, vector<string> &reg_fmt)
 {
-	static const std::string REGISTER_TEMPLATE[] = {
-		" V0 = ", " V1 = ", " V2 = ", " V3 = ", " V4 = ", " V5 = ", " V6 = ",
-		" V7 = ", " V8 = ", " V9 = ", "V10 = ", "V11 = ", "V12 = ", "V13 = ",
-		"V14 = ", "V15 = ", " PC = ", " SP = ", "  I = ", " DT = ", " ST = ",
+	const std::pair<string, uint16_t> INTERNAL_REG_VALS[] = {
+		{"PC", emu.pc},
+		{"SP", emu.sp},
+		{" I", emu.index},
+		{"DT", emu.delay_timer()},
+		{"ST", emu.sound_timer()},
 	};
 
 	reg_fmt.clear();
-	// Registers are: V0-V15
-	int i = 0;
-	for (auto rval : emu.regs) {
-		reg_fmt.push_back(REGISTER_TEMPLATE[i] + to_string(rval));
-		i++;
+	// Registers are: V0-VF
+	for (int i = 0; i < C8_REG_CNT; ++i)
+		reg_fmt.push_back(
+			string(REGISTERS[i]) + " = " + to_string(emu.regs[i])
+		);
+	for (auto [name, val] : INTERNAL_REG_VALS) {
+		reg_fmt.push_back(name + " = " + to_string(val));
 	}
-	// and internal ones: PC, SP, I, ST, DT;
-	reg_fmt.push_back(REGISTER_TEMPLATE[i++] + to_string(emu.pc));
-	reg_fmt.push_back(REGISTER_TEMPLATE[i++] + to_string(emu.sp));
-	reg_fmt.push_back(REGISTER_TEMPLATE[i++] + to_string(emu.index));
-	reg_fmt.push_back(REGISTER_TEMPLATE[i++] + to_string(emu.delay_timer()));
-	reg_fmt.push_back(REGISTER_TEMPLATE[i++] + to_string(emu.sound_timer()));
 }
 
 static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
@@ -216,7 +215,7 @@ int main(int argc, char const **argv)
 		fmt_registers(emu, regs_as_txt);
 		for (unsigned i = 0; i < regs_as_txt.size(); ++i) {
 			Vector2 pos = REG_INFO_BOX;
-			// Put registers V0-V11 in the first column, rest in the second
+			// Put registers V0-VB(10) in the first column, rest in the second
 			auto ypos_idx = i < 12 ? i : (i - 12);
 			pos.x += (i < 12 ? 0 : INFO_BOX_W / 2);
 			pos.y += ypos_idx * FONT_LINE_HEIGHT;

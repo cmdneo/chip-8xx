@@ -30,11 +30,11 @@ define W v2
 define A v3
 define S v4
 define D v5
-define KEY v12
+define KEY vC
 define XPOS v0
 define YPOS v1
-define LIM v10
-define ONE v11
+define LIM vA
+define ONE vB
 
 	ld I, ball ; Load sprite
 	ld ONE, 1
