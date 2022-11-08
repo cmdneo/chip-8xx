@@ -16,14 +16,14 @@ using std::end;
 using std::uint8_t;
 using std::chrono::steady_clock;
 
-static std::uniform_int_distribution<unsigned> byte_dist(0, 255);
+static std::uniform_int_distribution<unsigned> random_byte_distbr(0, 255);
 
 Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 {
 	constexpr auto rom_max = C8_RAM_SIZE - C8_PROG_START;
 	if (rom_end - rom_beg > rom_max) {
-		std::clog << "Emulator: ERROR: ROM size too big!\n "
-				  << "Maximum is " << rom_max << "\n";
+		std::clog << "Emulator: ROM size too big! "
+				  << "Maximum is " << rom_max << " bytes\n";
 		error = true;
 		return;
 	}
@@ -31,6 +31,7 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 	// Seed the random number generator
 	std::random_device rdev;
 	rand_gen.seed(rdev());
+	// Start the clock from now!
 	reset_clock();
 	// Copy fonts
 	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
@@ -164,7 +165,7 @@ bool Emulator::step()
 		break;
 
 	case I::RND_v_b:
-		vvx = byte_dist(rand_gen) & ins.byte;
+		vvx = random_byte_distbr(rand_gen) & ins.byte;
 		break;
 
 	case I::DRW_v_v_n:
@@ -266,13 +267,11 @@ void Emulator::draw_sprite(uint8_t x, uint8_t y, uint8_t height)
 
 void Emulator::update_timers(double dt)
 {
-	if (stimer > 0)
-		stimer -= dt * C8_TIMER_FREQ;
-	else
+	stimer -= dt * C8_TIMER_FREQ;
+	dtimer -= dt * C8_TIMER_FREQ;
+	if (stimer < 0)
 		stimer = 0;
-	if (dtimer > 0)
-		dtimer -= dt * C8_TIMER_FREQ;
-	else
+	if (dtimer < 0)
 		dtimer = 0;
 }
 

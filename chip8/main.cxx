@@ -78,7 +78,7 @@ constexpr static Vector2 REG_INFO_BOX = {640, 320};
 constexpr static Vector2 INS_INFO_BOX = {640, 0};
 constexpr static Vector2 CONTROL_BOX = {0, 320};
 
-static void fmt_registers(const Emulator &emu, vector<string> &reg_fmt)
+static void fmt_registers(const Emulator &emu, vector<string> &reg_txts)
 {
 	const std::pair<string, uint16_t> INTERNAL_REG_VALS[] = {
 		{"PC", emu.pc},
@@ -88,15 +88,17 @@ static void fmt_registers(const Emulator &emu, vector<string> &reg_fmt)
 		{"ST", emu.sound_timer()},
 	};
 
-	reg_fmt.clear();
-	// Registers are: V0-VF
+	auto fmt_reg = [](const string &reg_name, uint16_t val) {
+		return reg_name + " = " + std::to_string(val);
+	};
+	reg_txts.clear();
+
+	// Registers V0-VF
 	for (int i = 0; i < C8_REG_CNT; ++i)
-		reg_fmt.push_back(
-			string(REGISTERS[i]) + " = " + to_string(emu.regs[i])
-		);
-	for (auto [name, val] : INTERNAL_REG_VALS) {
-		reg_fmt.push_back(name + " = " + to_string(val));
-	}
+		reg_txts.push_back(fmt_reg(string(REGISTERS[i]), emu.regs[i]));
+	// Internal Registers
+	for (auto [name, val] : INTERNAL_REG_VALS)
+		reg_txts.push_back(fmt_reg(name, val));
 }
 
 static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
@@ -167,12 +169,15 @@ int main(int argc, char const **argv)
 	while (!WindowShouldClose()) {
 		// Handle key UI presses
 		//--------------------------------------------------
-		if (IsKeyPressed(KEY_LEFT) && ins_per_frame > 1)
+		// Only change speed if not paused
+		if (!paused && IsKeyPressed(KEY_LEFT) && ins_per_frame > 1)
 			ins_per_frame--;
-		else if (IsKeyPressed(KEY_RIGHT))
+		else if (!paused && IsKeyPressed(KEY_RIGHT))
 			ins_per_frame++;
 		if (IsKeyPressed(KEY_SPACE))
 			paused = !paused;
+		else if (IsKeyPressed(KEY_R))
+			emu = Emulator(rom, rom + bin_size);
 
 		// Start drawing things
 		//--------------------------------------------------
@@ -237,6 +242,8 @@ int main(int argc, char const **argv)
 		draw_padded_font("Left/Right Arrow    : Speed(-/+)", pos, RAYWHITE);
 		pos.y += FONT_LINE_HEIGHT;
 		draw_padded_font("Space               : Play/Pause", pos, RAYWHITE);
+		pos.y += FONT_LINE_HEIGHT;
+		draw_padded_font("R                   : Reset", pos, RAYWHITE);
 
 		EndDrawing();
 		//--------------------------------------------------
