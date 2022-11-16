@@ -63,7 +63,7 @@ loop:
 	and YPOS, LIM
 	; Clear & Draw
 	cls
-	drw XPOS, YPOS, 4
+	drw XPOS, YPOS, 2
 	jp loop
 
 

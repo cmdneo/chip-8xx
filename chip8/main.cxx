@@ -176,7 +176,7 @@ int main(int argc, char const **argv)
 			ins_per_frame++;
 		if (IsKeyPressed(KEY_SPACE))
 			paused = !paused;
-		else if (IsKeyPressed(KEY_R))
+		else if (IsKeyPressed(KEY_ENTER))
 			emu = Emulator(rom, rom + bin_size);
 
 		// Start drawing things
@@ -243,7 +243,7 @@ int main(int argc, char const **argv)
 		pos.y += FONT_LINE_HEIGHT;
 		draw_padded_font("Space               : Play/Pause", pos, RAYWHITE);
 		pos.y += FONT_LINE_HEIGHT;
-		draw_padded_font("R                   : Reset", pos, RAYWHITE);
+		draw_padded_font("Enter               : Reset", pos, RAYWHITE);
 
 		EndDrawing();
 		//--------------------------------------------------

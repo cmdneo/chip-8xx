@@ -60,6 +60,10 @@ In place of address a label-name can be used.
 | 34  | `Fx55`   | `LD [I], Vx`         |
 | 35  | `Fx65`   | `LD Vx, [I]`         |
 
+General purpose Registers: `V0`, `V1`, `V2`, `V3`, `V4`, `V5`, `V6`, `V7`, `V8`, `V9`,
+`VA`, `VB`, `VC`, `VD`, `VE`, `VF`  
+Special Purpose Registers: `PC`, `SP`, `I`, `DT`, `ST`
+
 __*__ : Branch Instructions  
 __^__ : Sets carry flag (`VF` register)
 
@@ -72,7 +76,7 @@ Directives
 | `define alias subst` | Dumb Textual replacement(see below)        |
 
 For `define` directive alias should be an identifier and  
-subst can be any token (Regex: `[0-9A-Za-z_]`).
+subst can be any token (Regex: `[0-9A-Za-z_]+`).
 
 **WARNING**: If instructions are not aligned by 2-bytes then the behaviour is undefined.
 So when using `db` directive put even number of bytes, preferably at the end of the file.
