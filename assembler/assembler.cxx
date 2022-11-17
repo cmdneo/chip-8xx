@@ -155,6 +155,7 @@ static Tok parse_ident()
 {
 	identifier.clear();
 	identifier = string(scanner.skip_while(is_ident_char));
+	// FIXME Parse as immediate if integer
 	if (auto alias = define_map.find(identifier); alias != define_map.end())
 		identifier = alias->second;
 

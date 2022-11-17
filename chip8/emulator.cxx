@@ -178,7 +178,7 @@ bool Emulator::step()
 		break;
 
 	case I::SKNP_v:
-		if (key != C8_KEY_NONE && vvx != key)
+		if (key == C8_KEY_NONE || vvx != key)
 			pc += C8_INS_LEN;
 		break;
 
