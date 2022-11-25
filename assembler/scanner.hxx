@@ -3,19 +3,20 @@
 
 #include <optional>
 #include <string_view>
+#include <functional>
 
 class Scanner
 {
 public:
-	Scanner(std::string_view s)
+	Scanner(std::string_view s = "")
 		: txt(s)
+		, original(s)
 	{
 		if (!txt.empty())
 			cur = txt[0];
 	}
 
-	int line() { return line_num; }
-	int column() { return column_num; }
+	int cursor() { return cursor_at; }
 	std::string_view view() { return txt; }
 	std::optional<char> prev() { return pre; }
 	std::optional<char> first() { return cur; }
@@ -30,25 +31,21 @@ public:
 	{
 		while (n--) {
 			txt = txt.substr(1);
-			if (cur == '\n') {
-				line_num++;
-				column_num = 0;
-			}
 			if (txt.empty()) {
 				cur = {};
 				break;
 			}
-			column_num++;
+			cursor_at++;
 			pre = cur;
 			cur = txt.front();
 		}
 	}
-	std::string_view skip_while(auto(*pred)(char ch)->bool)
+	std::string_view skip_while(std::function<bool(char)> unary_pred)
 	{
 		auto ret = txt;
 		int cnt = 0;
 		while (auto c = first()) {
-			if (!pred(*c))
+			if (!unary_pred(*c))
 				break;
 			cnt++;
 			skip();
@@ -58,10 +55,10 @@ public:
 
 private:
 	std::string_view txt;
+	std::string_view original;
 	std::optional<char> cur = {};
 	std::optional<char> pre = {};
-	int line_num = 0;
-	int column_num = 0;
+	std::string_view::size_type cursor_at = 0;
 };
 
 #endif // END scanner.hxx

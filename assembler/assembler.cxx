@@ -1,4 +1,7 @@
 // Parse CHIP-8 assembly as described in chi8.md
+// PARSING
+// Each line is a statement, parse line by line
+// First perform the substitutions, then  parse
 
 #include <cctype>
 #include <cstdint>
@@ -17,6 +20,7 @@
 
 using std::begin;
 using std::end;
+using std::map;
 using std::nullopt;
 using std::optional;
 using std::string;
@@ -26,7 +30,7 @@ using std::vector;
 
 /// @brief Instructions with operand info encoded and opcodes map
 /// @note JP_V0_a is an exception
-static std::map<string_view, uint16_t> INS_OPCODE_MAP = {
+static map<string_view, uint16_t> INS_OPCODE_MAP = {
 	{"CLS", 0x00E0},     {"RET", 0x00EE},     {"SYSa", 0x0000},
 	{"JPa", 0x1000},     {"CALLa", 0x2000},   {"SEv,b", 0x3000},
 	{"SNEv,b", 0x4000},  {"SEv,v", 0x5000},   {"LDv,b", 0x6000},
@@ -42,46 +46,72 @@ static std::map<string_view, uint16_t> INS_OPCODE_MAP = {
 };
 // static constexpr int INS_INFO_MAX_LEN = 8;
 
+#define LOG_ERR_GET(err_msg, val) (log_err((err_msg)), (val));
+
 struct Statement {
 	uint16_t opcode = 0;
-	uint16_t imm = 0;
+	uint16_t immediate = 0;
 	uint8_t vx = 0;
 	uint8_t vy = 0;
 	string label;
-	int line = 0;
-	// For db(data byte) directive
+	// Is db(data byte) directive
 	bool is_db = false;
+	// Debugging information
+	int line = 0;
 };
 
 enum class Tok {
 	STOP,
-	NUM,
-	IDENT,
-	REG,
-	DIR,
-	INS,
+	DIREC_DB,
+	DIREC_DEFINE,
+	INSTRUCTION,
+	REGISTER,
+	IDENTIFIER,
+	IMMEDIATE,
 	CHAR,
 };
 
-// Parser state Globals
-static Scanner scanner("");
-
-static uint16_t number; // For immediate and register index
-static string identifier;
-static Directive directive;
-static char character;
-static int error_count = 0;
-static std::map<string, string> define_map;
-
-#define LOG_ERR_GET(err_msg, val) (log_err((err_msg)), (val));
-
-static void log_err(string_view err_msg, int line = -1)
+// -----------------------------------------------------------------------
+// Chip-8 Assembly parser, parser line by line, case-insesetive
+class Parser
 {
-	error_count++;
-	std::clog << "Parse ERROR: "
-			  << "Line " << (line < 0 ? scanner.line() + 1 : line + 1) << ": "
-			  << err_msg << "\n";
-}
+public:
+	Parser(std::istream &asm_code_stream)
+		: code_stream(asm_code_stream)
+	{
+	}
+
+	optional<vector<uint8_t>> parse_and_assemble();
+
+private:
+	Tok parse_immediate();
+	Tok parse_identifier();
+	Tok next_token();
+	optional<int> parse_define();
+	optional<Statement> parse_instruction();
+	optional<Statement> parse_line(string_view line);
+	void log_err(string_view msg, int line = -1);
+
+	// The stream for reading input
+	std::istream &code_stream;
+	// Scanner for the current line
+	Scanner scn;
+	// Define substitution map
+	map<string, string> define_map;
+	// Label and their associated addresses
+	map<string, uint16_t> label_map;
+	// Current label address (if present)
+	uint16_t label_addr = C8_PROG_START;
+	int line_num = 0;
+
+	/// Immediate has negative sign
+	bool is_negative = false;
+	// Absolute immediate value or register index)
+	uint16_t number = 0;
+	string identifier;
+	char character = '\0';
+	int error_cnt = 0;
+};
 
 static inline bool is_ident_char(char c) { return std::isalnum(c) || c == '_'; }
 
@@ -110,22 +140,36 @@ static uint16_t char_to_uint(char c)
 		return UINT16_MAX;
 }
 
-static Tok parse_int()
+static inline bool is_reserved_name(string_view s)
+{
+	// Name of internal registers(non V's) used by assembly
+	return s == "F" || s == "B" || s == "I" || s == "K" || s == "DT"
+		   || s == "ST";
+}
+
+Tok Parser::parse_immediate()
 {
 	uint16_t base = 10;
+	is_negative = false;
 	number = 0;
 
-	if (scanner.first() == '0') {
-		char sec = scanner.second().value_or('0');
+	if (auto c = scn.first(); c == '+' || c == '-') {
+		is_negative = c == '-';
+		scn.skip();
+		scn.skip_while([](char c) { return !!std::isblank(c); });
+	}
+
+	if (scn.first() == '0') {
+		char sec = scn.second().value_or('0');
 		if (sec == 'X')
 			base = 16;
 		else if (sec == 'B')
 			base = 2;
 		if (base != 10)
-			scanner.skip(2);
+			scn.skip(2);
 	}
 
-	while (auto c = scanner.first()) {
+	while (auto c = scn.first()) {
 		if (!std::isalnum(*c))
 			break;
 		auto dig = char_to_uint(*c);
@@ -135,70 +179,87 @@ static Tok parse_int()
 		if (number == UINT16_MAX)
 			return LOG_ERR_GET("Integer overflow", Tok::STOP);
 
-		scanner.skip();
+		scn.skip();
 	}
 
-	return Tok::NUM;
+	return Tok::IMMEDIATE;
 }
 
-static int
-index_of_sv(const string_view *b, const string_view *e, string_view item)
-{
-	auto it = std::find(b, e, item);
-	if (it != e)
-		return it - b;
-	else
-		return -1;
-}
-
-static Tok parse_ident()
+Tok Parser::parse_identifier()
 {
 	identifier.clear();
-	identifier = string(scanner.skip_while(is_ident_char));
-	// FIXME Parse as immediate if integer
+	identifier = string(scn.skip_while(is_ident_char));
 	if (auto alias = define_map.find(identifier); alias != define_map.end())
 		identifier = alias->second;
+	if (identifier.empty())
+		return LOG_ERR_GET("Empty substitution", Tok::STOP);
 
-	// Check if: Register, instruction or direcrive
-	int idx = 0;
-	idx = index_of_sv(begin(INSTRUCTIONS), end(INSTRUCTIONS), identifier);
-	if (idx != -1) {
-		return Tok::INS;
-	}
-	idx = index_of_sv(begin(DIRECTIVES), end(DIRECTIVES), identifier);
-	if (idx != -1) {
-		directive = Directive{idx};
-		return Tok::DIR;
-	}
-	idx = index_of_sv(begin(REGISTERS), end(REGISTERS), identifier);
-	if (idx != -1) {
-		number = idx;
-		return Tok::REG;
+	// If the substitution result is a number(maybe), then parse that
+	if (auto c = identifier.front(); c == '-' || c == '+' || std::isdigit(c)) {
+		auto old_scn = scn;
+		scn = Scanner(identifier);
+		auto ret = parse_immediate();
+		scn = old_scn;
+		return ret;
 	}
 
-	return Tok::IDENT;
+	// Check if: Directive
+	if (identifier == "DB")
+		return Tok::DIREC_DB;
+	if (identifier == "DEFINE")
+		return Tok::DIREC_DEFINE;
+
+	// Check if: Instruction
+	auto ins = std::find(begin(INSTRUCTIONS), end(INSTRUCTIONS), identifier);
+	if (ins != end(INSTRUCTIONS))
+		return Tok::INSTRUCTION;
+
+	// Check if: Register
+	auto reg = std::find(begin(REGISTERS), end(REGISTERS), identifier);
+	if (reg != end(REGISTERS)) {
+		number = reg - begin(REGISTERS);
+		return Tok::REGISTER;
+	}
+
+	return Tok::IDENTIFIER;
 }
 
-static Tok next_token()
+Tok Parser::next_token()
 {
-	while (auto tmp = scanner.first()) {
+	while (auto tmp = scn.first()) {
 		char c = *tmp;
-		if (std::isdigit(c)) {
-			return parse_int();
+		if (std::isdigit(c) || c == '-' || c == '+') {
+			return parse_immediate();
 		} else if (is_ident_char(c)) {
-			return parse_ident();
+			return parse_identifier();
 		} else if (std::isblank(c)) {
-			scanner.skip();
+			scn.skip();
 		} else if (c == ';') {
-			scanner.skip_while([](char c) { return c != '\n'; });
+			scn.skip_while([](char c) { return c != '\n'; });
 		} else {
-			scanner.skip();
+			scn.skip();
 			character = c;
 			return Tok::CHAR;
 		}
 	}
 
 	return Tok::STOP;
+}
+
+optional<int> Parser::parse_define()
+{
+	scn.skip_while([](char c) { return !!std::isblank(c); });
+	auto alias = scn.skip_while(is_ident_char);
+	if (alias.empty() || std::isdigit(alias.front()))
+		return LOG_ERR_GET("Expected alias for define", nullopt);
+
+	scn.skip_while([](char c) { return !!std::isblank(c); });
+	auto subst = scn.skip_while(is_ident_char);
+	if (subst.empty())
+		return LOG_ERR_GET("Expected substituion for define", nullopt);
+
+	define_map[string(alias)] = string(subst);
+	return alias.size();
 }
 
 static bool is_ins_info_valid(string_view ins_info)
@@ -211,7 +272,7 @@ static bool is_ins_info_valid(string_view ins_info)
 	return false;
 }
 
-static optional<Statement> parse_ins()
+optional<Statement> Parser::parse_instruction()
 {
 	Statement ret{};
 	uint16_t imm_lim = 0;
@@ -225,19 +286,17 @@ static optional<Statement> parse_ins()
 	while (1) {
 		auto valid = INS_OPCODE_MAP.find(ins_info);
 		if (valid != INS_OPCODE_MAP.end()) {
-			if (!(next_token() == Tok::CHAR && character == '\n'))
-				return LOG_ERR_GET("Newline expected", nullopt);
-			ret.line = scanner.line();
+			ret.line = line_num;
 			ret.opcode = valid->second;
 			return ret;
 		}
+		// std::clog << ins_info << "\n";
 		if (!is_ins_info_valid(ins_info))
 			return LOG_ERR_GET("Illegal Token", nullopt);
-		// std::clog << ins_info << "\n";
 
 		switch (next_token()) {
-		// Terminal token
-		case Tok::NUM:
+		// Immediate is a terminal token
+		case Tok::IMMEDIATE:
 			// Ony DRW has nibble as its last argument
 			if (ins_info == "DRWv,v,") {
 				imm_lim = C8_NIBBLE_MAX;
@@ -251,12 +310,20 @@ static optional<Statement> parse_ins()
 			} else {
 				return LOG_ERR_GET("Unexpected immediate", nullopt);
 			}
-			if (number > imm_lim)
+
+			// Negative sign applicable only for BYTE, make a 2's complement
+			if (!is_negative)
+				ret.immediate = number;
+			else if (imm_lim == C8_BYTE_MAX)
+				ret.immediate = (~number + 1) & C8_BYTE_MAX;
+			else
+				return LOG_ERR_GET("Negative sign not allowed here", nullopt);
+
+			if (number > imm_lim || (is_negative && number > abs(INT8_MIN)))
 				return LOG_ERR_GET("Immediate out of range", nullopt);
-			ret.imm = number;
 			break;
 
-		case Tok::IDENT:
+		case Tok::IDENTIFIER:
 			// JP addr; JP V0, addr; CALL addr; LD I, addr; can have labels
 			// The labels are later replaced with their corresponding addresses
 			if (ins_info == "JP" || ins_info == "JPV0," || ins_info == "CALL"
@@ -268,7 +335,7 @@ static optional<Statement> parse_ins()
 			}
 			break;
 
-		case Tok::REG:
+		case Tok::REGISTER:
 			// Exception: JP V0, addr; Has V0 as a fixed operand
 			if (ins_info == "JP" && number == 0) {
 				ins_info += "V0";
@@ -298,121 +365,87 @@ static optional<Statement> parse_ins()
 	return LOG_ERR_GET("This should not happen", nullopt);
 }
 
-static inline bool is_reserved_name(string_view s)
+optional<Statement> Parser::parse_line(string_view line)
 {
-	// Name of internal registers(non V's) used by assembly
-	return s == "F" || s == "B" || s == "I" || s == "K" || s == "DT"
-		   || s == "ST";
-}
+	Statement ret;
+	scn = Scanner(line);
 
-static optional<Statement> parse_db()
-{
-	Statement ret{};
-	ret.is_db = true;
-
-	if (next_token() != Tok::NUM)
-		return LOG_ERR_GET("Immediate expected after DB", nullopt);
-	if (number > C8_BYTE_MAX)
-		return LOG_ERR_GET("Immediate too big(>255) ", nullopt);
-	if (!(next_token() == Tok::CHAR && character == '\n'))
-		return LOG_ERR_GET("Newline expected", nullopt);
-
-	ret.imm = number;
-	return ret;
-}
-
-static bool parse_define()
-{
-	if (next_token() != Tok::IDENT)
-		return LOG_ERR_GET("Identifier expected after define", false);
-	if (is_reserved_name(identifier))
-		return LOG_ERR_GET("define alias cannot be a reserved name", false);
-	scanner.skip_while([](char c) { return !!std::isblank(c); });
-
-	string alias = identifier;
-	string subst(scanner.skip_while(is_ident_char));
-
-	if (subst.empty())
-		return LOG_ERR_GET("Subsitution name expected after alias", false);
-	if (!(next_token() == Tok::CHAR && character == '\n'))
-		return LOG_ERR_GET("Newline expected", false);
-
-	define_map[alias] = subst;
-	return true;
-}
-
-static optional<vector<uint8_t>> parse_and_assemble()
-{
-	std::map<string, unsigned> label_map;
-	vector<Statement> statements;
-	vector<uint8_t> bincode;
-	unsigned label_addr = C8_PROG_START;
-	bool run = true;
-
-	while (run) {
+	while (true) {
 		auto tok = next_token();
 
 		switch (tok) {
 		case Tok::STOP:
-			if (error_count)
-				return nullopt;
-			run = false;
-			break;
+			return nullopt;
 
-		case Tok::NUM:
-			return LOG_ERR_GET("Unexpected integer", nullopt);
+		case Tok::DIREC_DB:
+			if (next_token() != Tok::IMMEDIATE)
+				return LOG_ERR_GET("Expected immediate after db", nullopt);
+			ret.is_db = true;
+			ret.immediate = number;
+			label_addr++;
+			return ret;
 
-		case Tok::IDENT:
-			if (is_reserved_name(identifier)) {
-				return LOG_ERR_GET(
-					"Reserved name '" + identifier + "' cannot be a label",
-					nullopt
-				);
-			}
-			tok = next_token();
-			if (!(tok == Tok::CHAR && character == ':'))
-				return LOG_ERR_GET("Colon expected after label name", nullopt);
+		case Tok::DIREC_DEFINE:
+			parse_define();
+			// Define directive produces no code, so nullopt
+			return nullopt;
+
+		case Tok::INSTRUCTION:
+			label_addr += C8_INS_LEN;
+			return parse_instruction();
+
+		case Tok::REGISTER:
+			return LOG_ERR_GET("Unexpected register name", nullopt);
+
+		case Tok::IDENTIFIER:
+			if (is_reserved_name(identifier))
+				return LOG_ERR_GET("Label cannot be a reserved name", nullopt);
+			if (!(next_token() == Tok::CHAR && character == ':'))
+				return LOG_ERR_GET("Expected colon after label name", nullopt);
 			if (!label_map.insert({identifier, label_addr}).second)
-				return LOG_ERR_GET("Duplicate label defined", nullopt);
+				return LOG_ERR_GET("Redefined label name", nullopt);
 			break;
 
-		case Tok::REG:
-			return LOG_ERR_GET("Unexpected Register name", nullopt);
-
-		case Tok::DIR:
-			using D = Directive;
-			if (directive == D::DB) {
-				auto stmt = parse_db();
-				if (!stmt)
-					return nullopt;
-				statements.push_back(*stmt);
-				label_addr++;
-			} else if (directive == D::DEFINE) {
-				if (!parse_define())
-					return nullopt;
-			}
-			break;
-
-		case Tok::INS:
-			if (auto stmt = parse_ins()) {
-				statements.push_back(*stmt);
-				label_addr += C8_INS_LEN;
-			} else {
-				return nullopt;
-			}
-			break;
+		case Tok::IMMEDIATE:
+			return LOG_ERR_GET("Unexpected immediate name", nullopt);
 
 		case Tok::CHAR:
-			// Ignore extra white space
-			if (!std::isspace(character))
-				return LOG_ERR_GET("Illegal character", nullopt);
-			break;
+			return LOG_ERR_GET(
+				"Unexpected character '" + string({character}) + "' ("
+					+ std::to_string(character) + ")",
+				nullopt
+			);
 		}
 	}
+}
 
+optional<vector<uint8_t>> Parser::parse_and_assemble()
+{
+	vector<Statement> statements;
+	string line;
+
+	// Case-insesetive parsing
+	// Read a line, convert to uppercase then parse
+	while (std::getline(code_stream, line)) {
+		std::for_each(line.begin(), line.end(), [](char &c) {
+			c = std::toupper(c);
+		});
+
+		auto stmt = parse_line(line);
+		// After parsing a statement there should be no stray tokens at end
+		if (next_token() != Tok::STOP)
+			log_err("Unexpected stray token(s) after statement");
+		if (error_cnt)
+			return nullopt;
+		if (stmt && error_cnt == 0)
+			statements.push_back(*stmt);
+		line_num++;
+	}
+
+	vector<uint8_t> bincode;
 	for (auto &stmt : statements) {
 		if (stmt.is_db) {
-			bincode.push_back(stmt.imm & 0xFF);
+			bincode.push_back(stmt.immediate & 0xFF);
 			continue;
 		}
 		if (!stmt.label.empty()) {
@@ -421,10 +454,11 @@ static optional<vector<uint8_t>> parse_and_assemble()
 				log_err("Label not found: " + stmt.label, stmt.line);
 				return nullopt;
 			}
-			stmt.imm = addr->second;
+			stmt.immediate = addr->second;
 		}
 
-		uint16_t encoded = stmt.opcode | stmt.imm | (stmt.vx << C8_VX_OFFSET)
+		uint16_t encoded = stmt.opcode | stmt.immediate
+						   | (stmt.vx << C8_VX_OFFSET)
 						   | (stmt.vy << C8_VY_OFFSET);
 		// 2-bytes big endian
 		bincode.push_back(encoded >> 8);
@@ -434,14 +468,12 @@ static optional<vector<uint8_t>> parse_and_assemble()
 	return bincode;
 }
 
-static string read_to_uppercase_string(std::ifstream &file)
+void Parser::log_err(string_view err_msg, int my_line_num)
 {
-	string ret;
-	char c;
-	while (file.get(c))
-		ret += std::toupper(c);
-
-	return ret;
+	error_cnt++;
+	std::clog << "Parse ERROR: "
+			  << "Line " << (my_line_num < 0 ? line_num + 1 : my_line_num + 1)
+			  << ": " << err_msg << "\n";
 }
 
 int main(int argc, char const **argv)
@@ -458,9 +490,8 @@ int main(int argc, char const **argv)
 		return 1;
 	}
 
-	const string code = read_to_uppercase_string(infile); // Case-insesetive
-	scanner = Scanner(code);
-	auto bincode = parse_and_assemble();
+	Parser c8_parser(infile);
+	auto bincode = c8_parser.parse_and_assemble();
 	if (!bincode) {
 		std::clog << "Parsing failed\n";
 		return 1;
