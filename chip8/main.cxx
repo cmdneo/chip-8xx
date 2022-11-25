@@ -112,7 +112,7 @@ static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
 		amp += std::sin(wt * 800) / 4;
 		amp += std::sin(wt * 300) / 4;
 		data[i] = amp * (INT16_MAX - 1);
-		t += 1.0 / SAMPLE_RATE;
+		t += 1.0 / double(SAMPLE_RATE);
 	}
 }
 
@@ -156,8 +156,8 @@ int main(int argc, char const **argv)
 		nullptr, 0
 	);
 	auto draw_padded_font = [mono_font](const char *s, Vector2 pos, Color col) {
-		pos.x += 2 * TEXT_PADDING;
-		pos.y += TEXT_PADDING;
+		pos.x += float(2 * TEXT_PADDING);
+		pos.y += float(TEXT_PADDING);
 		DrawTextEx(mono_font, s, pos, FONT_SIZE, 0, col);
 	};
 
@@ -240,9 +240,9 @@ int main(int argc, char const **argv)
 		// Draw Help text
 		Vector2 pos = CONTROL_BOX;
 		draw_padded_font("Left/Right Arrow    : Speed(-/+)", pos, RAYWHITE);
-		pos.y += FONT_LINE_HEIGHT;
+		pos.y += float(FONT_LINE_HEIGHT);
 		draw_padded_font("Space               : Play/Pause", pos, RAYWHITE);
-		pos.y += FONT_LINE_HEIGHT;
+		pos.y += float(FONT_LINE_HEIGHT);
 		draw_padded_font("Enter               : Reset", pos, RAYWHITE);
 
 		EndDrawing();

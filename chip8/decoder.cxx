@@ -139,7 +139,7 @@ DecodedIns::DecodedIns(uint16_t ins)
 /// @brief Instruction format string
 const static string INSTRUCTION_FMT[] = {
 	"CLS",      "RET",      "SYS a",    "JP a",      "CALL a",    "SE x, b",
-	"SNE x, b", "SE x, x",  "LD x, b",  "ADD x, b",  "LD x, y",   "OR x, y",
+	"SNE x, b", "SE x, y",  "LD x, b",  "ADD x, b",  "LD x, y",   "OR x, y",
 	"AND x, y", "XOR x, y", "ADD x, y", "SUB x, y",  "SHR x",     "SUBN x, y",
 	"SHL x",    "SNE x, y", "LD I, a",  "JP V0,a",   "RND x, b",  "DRW x, y, n",
 	"SKP x",    "SKNP x",   "LD x, DT", "LD x, K",   "LD DT, x",  "LD ST, x",
