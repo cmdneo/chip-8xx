@@ -1,6 +1,7 @@
 #ifndef ASSEMBLER_SCANNER_HXX_INCLUDED
 #define ASSEMBLER_SCANNER_HXX_INCLUDED
 
+#include <cassert>
 #include <optional>
 #include <string_view>
 #include <functional>
@@ -29,13 +30,14 @@ public:
 	}
 	void skip(int n = 1)
 	{
+		assert(!txt.empty());
 		while (n--) {
 			txt = txt.substr(1);
+			cursor_at++;
 			if (txt.empty()) {
 				cur = {};
 				break;
 			}
-			cursor_at++;
 			pre = cur;
 			cur = txt.front();
 		}

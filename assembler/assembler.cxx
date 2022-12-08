@@ -19,6 +19,7 @@
 #include "scanner.hxx"
 
 using std::begin;
+using std::clog;
 using std::end;
 using std::map;
 using std::nullopt;
@@ -46,7 +47,13 @@ static map<string_view, uint16_t> INS_OPCODE_MAP = {
 };
 // static constexpr int INS_INFO_MAX_LEN = 8;
 
-#define LOG_ERR_GET(err_msg, val) (log_err((err_msg)), (val));
+#define LOG_ERR_GET(err_msg, val) (log_err((err_msg), (this->tok_span)), (val));
+
+struct Span {
+	unsigned line = 0;
+	unsigned column = 0;
+	unsigned length = 0;
+};
 
 struct Statement {
 	uint16_t opcode = 0;
@@ -54,10 +61,10 @@ struct Statement {
 	uint8_t vx = 0;
 	uint8_t vy = 0;
 	string label;
+	// Debugging info
+	Span label_span;
 	// Is db(data byte) directive
 	bool is_db = false;
-	// Debugging information
-	int line = 0;
 };
 
 enum class Tok {
@@ -76,9 +83,10 @@ enum class Tok {
 class Parser
 {
 public:
-	Parser(std::istream &asm_code_stream)
-		: code_stream(asm_code_stream)
+	Parser(const std::vector<string> &asm_lines)
 	{
+		for (auto &line : asm_lines)
+			lines.push_back(line);
 	}
 
 	optional<vector<uint8_t>> parse_and_assemble();
@@ -87,22 +95,24 @@ private:
 	Tok parse_immediate();
 	Tok parse_identifier();
 	Tok next_token();
+	Tok next_token_impl();
 	optional<int> parse_define();
 	optional<Statement> parse_instruction();
 	optional<Statement> parse_line(string_view line);
-	void log_err(string_view msg, int line = -1);
+	void log_err(string_view msg, Span span);
 
 	// The stream for reading input
-	std::istream &code_stream;
+	std::vector<string_view> lines;
 	// Scanner for the current line
 	Scanner scn;
+	/// Last token position
+	Span tok_span;
 	// Define substitution map
 	map<string, string> define_map;
 	// Label and their associated addresses
 	map<string, uint16_t> label_map;
 	// Current label address (if present)
 	uint16_t label_addr = C8_PROG_START;
-	int line_num = 0;
 
 	/// Immediate has negative sign
 	bool is_negative = false;
@@ -110,7 +120,10 @@ private:
 	uint16_t number = 0;
 	string identifier;
 	char character = '\0';
+
+	int line_num = 0;
 	int error_cnt = 0;
+	const int error_max = 10;
 };
 
 static inline bool is_ident_char(char c) { return std::isalnum(c) || c == '_'; }
@@ -224,8 +237,11 @@ Tok Parser::parse_identifier()
 	return Tok::IDENTIFIER;
 }
 
-Tok Parser::next_token()
+Tok Parser::next_token_impl()
 {
+	tok_span.line = line_num;
+	tok_span.column = scn.cursor();
+
 	while (auto tmp = scn.first()) {
 		char c = *tmp;
 		if (std::isdigit(c) || c == '-' || c == '+') {
@@ -234,6 +250,7 @@ Tok Parser::next_token()
 			return parse_identifier();
 		} else if (std::isblank(c)) {
 			scn.skip();
+			tok_span.column = scn.cursor();
 		} else if (c == ';') {
 			scn.skip_while([](char c) { return c != '\n'; });
 		} else {
@@ -244,6 +261,13 @@ Tok Parser::next_token()
 	}
 
 	return Tok::STOP;
+}
+
+Tok Parser::next_token()
+{
+	auto ret = next_token_impl();
+	tok_span.length = scn.cursor() - tok_span.column;
+	return ret;
 }
 
 optional<int> Parser::parse_define()
@@ -286,11 +310,11 @@ optional<Statement> Parser::parse_instruction()
 	while (1) {
 		auto valid = INS_OPCODE_MAP.find(ins_info);
 		if (valid != INS_OPCODE_MAP.end()) {
-			ret.line = line_num;
+			ret.label_span = tok_span;
 			ret.opcode = valid->second;
 			return ret;
 		}
-		// std::clog << ins_info << "\n";
+		// clog << ins_info << "\n";
 		if (!is_ins_info_valid(ins_info))
 			return LOG_ERR_GET("Illegal Token", nullopt);
 
@@ -422,26 +446,26 @@ optional<Statement> Parser::parse_line(string_view line)
 optional<vector<uint8_t>> Parser::parse_and_assemble()
 {
 	vector<Statement> statements;
-	string line;
 
-	// Case-insesetive parsing
-	// Read a line, convert to uppercase then parse
-	while (std::getline(code_stream, line)) {
-		std::for_each(line.begin(), line.end(), [](char &c) {
-			c = std::toupper(c);
-		});
-
+	for (const auto &line : lines) {
+		auto prev_errs = error_cnt;
 		auto stmt = parse_line(line);
-		// After parsing a statement there should be no stray tokens at end
-		if (next_token() != Tok::STOP)
-			log_err("Unexpected stray token(s) after statement");
-		if (error_cnt)
+
+		// TODO Code cleanup!
+		// There should be stray tokens at end given no errors in this line
+		if (prev_errs == error_cnt && next_token() != Tok::STOP)
+			log_err("Unexpected stray token(s) after statement", tok_span);
+		if (error_cnt >= error_max) {
+			clog << "Stopping after max errors: " << error_max << "\n";
 			return nullopt;
-		if (stmt && error_cnt == 0)
+		}
+
+		if (stmt)
 			statements.push_back(*stmt);
 		line_num++;
 	}
 
+	// Generate code even if some statemenets are invalid to report further errors
 	vector<uint8_t> bincode;
 	for (auto &stmt : statements) {
 		if (stmt.is_db) {
@@ -451,8 +475,12 @@ optional<vector<uint8_t>> Parser::parse_and_assemble()
 		if (!stmt.label.empty()) {
 			auto addr = label_map.find(stmt.label);
 			if (addr == label_map.end()) {
-				log_err("Label not found: " + stmt.label, stmt.line);
-				return nullopt;
+				log_err("Label not found: " + stmt.label, stmt.label_span);
+				if (error_cnt >= error_max) {
+					clog << "Stopping after max errors: " << error_max << "\n";
+					return nullopt;
+				}
+				continue;
 			}
 			stmt.immediate = addr->second;
 		}
@@ -465,41 +493,70 @@ optional<vector<uint8_t>> Parser::parse_and_assemble()
 		bincode.push_back(encoded & 0xFF);
 	}
 
+	if (error_cnt != 0)
+		return nullopt; // Discard all code if errors
 	return bincode;
 }
 
-void Parser::log_err(string_view err_msg, int my_line_num)
+void Parser::log_err(string_view err_msg, Span span)
 {
 	error_cnt++;
-	std::clog << "Parse ERROR: "
-			  << "Line " << (my_line_num < 0 ? line_num + 1 : my_line_num + 1)
-			  << ": " << err_msg << "\n";
+	string token(lines[span.line].substr(span.column, span.length));
+	bool is_macro = define_map.find(token) != define_map.end();
+
+	// Print the message
+	clog << "Parse ERROR: " << (span.line + 1) << ":" << (span.column + 1)
+		 << " " << err_msg << "\n";
+	// Print line and marke the region of invalid token
+	clog << lines[span.line] << "\n";
+	clog << string(span.column, '~') << string(span.length, '^');
+	// Print replacement if is a macro
+	if (is_macro)
+		clog << "(macro for '" << define_map[token] << "')";
+	clog << "\n\n";
+}
+
+vector<string> read_lines_uppercase(std::ifstream &is)
+{
+	vector<string> lines;
+	string line;
+	while (std::getline(is, line)) {
+		std::for_each(line.begin(), line.end(), [](char &c) {
+			c = std::toupper(c);
+			if (c == '\t')
+				c = ' ';
+		});
+		lines.push_back(std::move(line));
+	}
+
+	return lines;
 }
 
 int main(int argc, char const **argv)
 {
 	if (argc != 3) {
 		auto name = argc > 0 ? argv[0] : "c8asm";
-		std::clog << "Usage: " << name << " <infile> <outfile>\n";
+		clog << "Usage: " << name << " <infile> <outfile>\n";
 		return 1;
 	}
 
 	std::ifstream infile(argv[1]);
 	if (!infile) {
-		std::clog << "Cannot open file '" << argv[1] << "'\n";
+		clog << "Cannot open file '" << argv[1] << "'\n";
 		return 1;
 	}
 
-	Parser c8_parser(infile);
+	auto lines = read_lines_uppercase(infile);
+	Parser c8_parser(lines);
 	auto bincode = c8_parser.parse_and_assemble();
 	if (!bincode) {
-		std::clog << "Parsing failed\n";
+		clog << "Parsing failed\n";
 		return 1;
 	}
 
 	std::ofstream outfile(argv[2], std::ios::binary);
 	if (!outfile) {
-		std::clog << "Cannot open file '" << argv[2] << "'\n";
+		clog << "Cannot open file '" << argv[2] << "'\n";
 		return 1;
 	}
 
