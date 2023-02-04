@@ -16,16 +16,17 @@ class Emulator
 {
 public:
 	Emulator(const uint8_t *rom_beg, const uint8_t *rom_end);
-	operator bool() { return !error; }
+	explicit operator bool() { return !error; }
 	bool step();
-	/// @brief Resets the internal clock used for timers
+	/// Resets the internal clock used for timers
 	void reset_clock() { last_time = std::chrono::steady_clock::now(); }
 	bool pixel(int x, int y) { return screen[y][x]; }
 
-	// Direct access is often needed
 	uint8_t delay_timer() const { return std::lround(dtimer); }
 	uint8_t sound_timer() const { return std::lround(stimer); }
 	uint16_t fetch_ins(uint16_t n) const { return (ram[n] << 8) | ram[n + 1]; }
+
+	// Direct access is needed for displaying info
 	uint16_t pc = C8_PROG_START;
 	uint16_t index = 0;
 	uint8_t sp = 0;

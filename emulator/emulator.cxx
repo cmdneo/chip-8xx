@@ -31,11 +31,14 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 	// Seed the random number generator
 	std::random_device rdev;
 	rand_gen.seed(rdev());
+
 	// Start the clock from now!
 	reset_clock();
+
 	// Copy fonts
 	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
 	copy(fontp, fontp + sizeof(FONT_SPRITES), ram);
+
 	// Load program
 	copy(rom_beg, rom_end, ram + C8_PROG_START);
 }
@@ -183,7 +186,7 @@ bool Emulator::step()
 		break;
 
 	case I::LD_v_DT:
-		vvx = dtimer;
+		vvx = delay_timer();
 		break;
 
 	case I::LD_v_K:
@@ -253,12 +256,16 @@ void Emulator::draw_sprite(uint8_t x, uint8_t y, uint8_t height)
 		auto yf = (y + i) % C8_SCREEN_HEIGHT;
 		for (unsigned j = 0; j != 8; ++j) {
 			auto xf = (x + j) % C8_SCREEN_WIDTH;
+
+			// We XOR with the current pixels with the sprite
+			// If an ON pixel goes OFF then we call that a collision
 			// MSB to LSB - Left to right
-			auto bit = (ram[(index + i) % C8_RAM_SIZE] >> (7 - j)) & 1;
-			uint8_t tmp = screen[yf][xf] ^ bit;
-			if (screen[yf][xf] && !tmp)
+			auto img_px = (ram[(index + i) % C8_RAM_SIZE] >> (7 - j)) & 1;
+			uint8_t new_px = screen[yf][xf] ^ img_px;
+
+			if (screen[yf][xf] && !new_px)
 				collision = true;
-			screen[yf][xf] = tmp;
+			screen[yf][xf] = new_px;
 		}
 	}
 

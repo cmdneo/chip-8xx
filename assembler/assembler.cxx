@@ -1,7 +1,6 @@
 // Parse CHIP-8 assembly as described in chi8.md
 // PARSING
 // Each line is a statement, parse line by line
-// First perform the substitutions, then  parse
 
 #include <cctype>
 #include <cstdint>

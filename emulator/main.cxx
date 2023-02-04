@@ -74,9 +74,12 @@ enum UiConfig {
 	// Gap of (3/4 * font_size) looks fine
 	FONT_LINE_HEIGHT = 3 * FONT_SIZE / 4,
 };
-constexpr static Vector2 REG_INFO_BOX = {640, 320};
-constexpr static Vector2 INS_INFO_BOX = {640, 0};
-constexpr static Vector2 CONTROL_BOX = {0, 320};
+constexpr static Vector2 REG_INFO_BOX_POS = {640, 320};
+constexpr static Vector2 INS_INFO_BOX_POS = {640, 0};
+constexpr static Vector2 CONTROL_BOX_POS = {0, 320};
+
+constexpr static Color COLOR_SUPERDARK{32, 32, 32, 255};
+constexpr static Color COLOR_DIMBLUE{40, 85, 125, 255};
 
 static void fmt_registers(const Emulator &emu, vector<string> &reg_txts)
 {
@@ -186,10 +189,10 @@ int main(int argc, char const **argv)
 
 		// Magic numbers!? See GUI-plan diagram above ^^^
 		// Register debug box, BLACK (Already painted background)
-		// Instruction debug box, Daark
-		DrawRectangle(640, 0, 320, 320, Color{32, 32, 32, 255});
-		// Emulator screen, Dim blue
-		DrawRectangle(0, 0, 640, 320, Color{40, 85, 125, 255});
+		// Instruction debug box
+		DrawRectangle(640, 0, 320, 320, COLOR_SUPERDARK);
+		// Emulator screen
+		DrawRectangle(0, 0, 640, 320, COLOR_DIMBLUE);
 		// Control box
 		DrawRectangle(0, 320, 640, 320, DARKGRAY);
 
@@ -210,7 +213,8 @@ int main(int argc, char const **argv)
 				ins_str = "~";
 			else
 				ins_str = DecodedIns(emu.fetch_ins(new_pc)).to_string();
-			Vector2 pos = INS_INFO_BOX;
+
+			Vector2 pos = INS_INFO_BOX_POS;
 			pos.y += FONT_LINE_HEIGHT * (i + INS_CONTEXT);
 			// Highlight the current instruction GOLD
 			draw_padded_font(ins_str.c_str(), pos, (i == 0 ? GOLD : RED));
@@ -219,7 +223,7 @@ int main(int argc, char const **argv)
 		// Debug registers
 		fmt_registers(emu, regs_as_txt);
 		for (unsigned i = 0; i < regs_as_txt.size(); ++i) {
-			Vector2 pos = REG_INFO_BOX;
+			Vector2 pos = REG_INFO_BOX_POS;
 			// Put registers V0-VB(10) in the first column, rest in the second
 			auto ypos_idx = i < 12 ? i : (i - 12);
 			pos.x += (i < 12 ? 0 : INFO_BOX_W / 2);
@@ -238,7 +242,7 @@ int main(int argc, char const **argv)
 		}
 
 		// Draw Help text
-		Vector2 pos = CONTROL_BOX;
+		Vector2 pos = CONTROL_BOX_POS;
 		draw_padded_font("Left/Right Arrow    : Speed(-/+)", pos, RAYWHITE);
 		pos.y += float(FONT_LINE_HEIGHT);
 		draw_padded_font("Space               : Play/Pause", pos, RAYWHITE);
