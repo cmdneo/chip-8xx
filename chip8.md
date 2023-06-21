@@ -75,9 +75,11 @@ Directives
 | `db byte`            | Puts a byte at the current memory location |
 | `define alias subst` | Dumb Textual replacement(see below)        |
 
-For `define` directive `alias` and `subst` should conform to following RegExes  
-`alias`:  `[A-Za-z_][0-9A-Za-z_]+`  
-`subst`: `[0-9A-Za-z_]+`
+For `define` directive `alias` should be an identifier and  
+`subst` is everything from after the alias till the end-of-line(newline not included).
+
+First replacements are performed in a line for aliases defined by define directive,
+then that line is processed.
 
 **WARNING**: If instructions are not aligned by 2-bytes then the behaviour is undefined.
 So when using `db` directive put even number of bytes, preferably at the end of the file.
