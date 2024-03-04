@@ -31,6 +31,7 @@ define A v3
 define S v4
 define D v5
 define KEY vC
+define BEEP_TIME vD
 define XPOS v0
 define YPOS v1
 define LIM vA
@@ -44,8 +45,10 @@ define ONE vB
 	ld A, 0x7 ; A
 	ld S, 0x8 ; S
 	ld D, 0x9 ; D
+	ld BEEP_TIME, 4
 loop:
 	ld KEY, K
+	ld ST, BEEP_TIME
 	; Move X
 	sknp A
 	sub XPOS, ONE

@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "raylib/raylib.h"
+#include "raylib/raymath.h"
 #include "decoder.hxx"
 #include "emulator.hxx"
 #include "chip8.hxx"
@@ -19,10 +20,10 @@ using std::to_string;
 using std::uint8_t;
 using std::vector;
 
+#define ARRAY_SIZE(arr) (sizeof(arr)) / (sizeof(arr[0]))
+
 /*
 GUI-plan:
-
-|------------ 640px -------------|---- 320px -----|
 |--------------------------------|----------------|  <
 |                                |                |  |
 |      64x32 Emualator Screen    | Instrustion    |  |
@@ -32,17 +33,44 @@ GUI-plan:
 |                                |                |  |
 |                                |                |  |
 |                                |                |  |
-|--------------------------------|----------------|  <
-|                                | Register       |  |
-|                                | Debug          |  |
-|                                |                |  |
-|         Control Box            |                |  |
-|                                |                | 320px
-|                                |                |  |
-|                                |                |  |
-|                                |         xxxHz  |  |
-|--------------------------------|----------------|  <
+|---------------|----------------|----------------|  <
+|               |                | Register       |  |
+|   Key press   |   Info box     | Debug          |  |
+|   Debug       |                |                |  |
+|               |                |                |  |
+|               |                |                | 320px
+|               |                |                |  |
+|               |                |                |  |
+|               |                |         xxxHz  |  |
+|---------------|----------------|----------------|  <
+|---- 320px ----|---- 320px -----|---- 320px -----|
+*/
 
+enum UiConfig {
+	SCREEN_W = 640 + 320,
+	SCREEN_H = 640,
+	INSTR_DECODE_CONTEXT = 5,
+	FONT_SIZE = 32,
+	LARGE_FONT_SIZE = 60,
+	TEXT_PADDING = 10,
+	LARGE_TEXT_PADDING = 20,
+	// Block sizes for elements
+	PIXEL_BLOCK_SIZE = 10,
+	KEY_BLOCK_SIZE = 80,
+	// Gap of (3/4 * font_size) looks fine
+	FONT_LINE_HEIGHT = 3 * FONT_SIZE / 4,
+};
+
+constexpr Rectangle SCREEN_BOX = {0, 0, 640, 320};
+constexpr Rectangle REG_DEBUG_BOX = {640, 320, 320, 320};
+constexpr Rectangle INSTR_DEBUG_BOX = {640, 0, 320, 320};
+constexpr Rectangle INFO_BOX = {320, 320, 320, 320};
+constexpr Rectangle KEY_PRESS_DEBUG_BOX = {0, 320, 320, 320};
+constexpr Vector2 KEY_SUBSCRIPT_OFFSET = {
+	2 * KEY_BLOCK_SIZE / 5, KEY_BLOCK_SIZE / 2
+};
+
+/*
 Key Mapping:
 Original C8 keys     Mapped to keys
 |---|---|---|---|    |---|---|---|---|
@@ -53,7 +81,24 @@ Original C8 keys     Mapped to keys
 |---|---|---|---|    |---|---|---|---|
 */
 
-static constexpr int C8_KEY_MAP[C8_KEY_CNT] = {
+struct C8Key {
+	int c8_keycode;
+	const char *c8_key_name;
+	const char *key_name;
+};
+
+// Map C8-key characters to keyboard characters. Since these are in their
+// layout order, we also store the c8-keycode for identifying keys.
+constexpr C8Key C8_KEY_NAME_MAP[C8_KEY_CNT] = {
+	{0x1, "1", "1"}, {0x2, "2", "2"}, {0x3, "3", "3"}, {0xc, "C", "4"}, // Row 1
+	{0x4, "4", "Q"}, {0x5, "5", "W"}, {0x6, "6", "E"}, {0xd, "D", "R"}, // Row 2
+	{0x7, "7", "A"}, {0x8, "8", "S"}, {0x9, "9", "D"}, {0xe, "E", "F"}, // Row 3
+	{0xa, "A", "Z"}, {0x0, "0", "X"}, {0xb, "B", "C"}, {0xf, "F", "V"}, // Row 4
+
+};
+
+// C8-keycodes to keyboard keys mapping, indexed by C8 keys in order: 0 to F.
+constexpr int C8_KEY_MAP[C8_KEY_CNT] = {
 	KEY_X, KEY_ONE, KEY_TWO, KEY_THREE, KEY_Q,    KEY_W, KEY_E, KEY_A,
 	KEY_S, KEY_D,   KEY_Z,   KEY_C,     KEY_FOUR, KEY_R, KEY_F, KEY_V,
 };
@@ -63,23 +108,10 @@ enum AudioConfig {
 	SAMPLE_SIZE = 16,
 };
 
-enum UiConfig {
-	BLOCK_SIZE = 10,
-	SCREEN_W = 640 + 320,
-	SCREEN_H = 640,
-	INFO_BOX_W = 320,
-	TEXT_PADDING = 10,
-	INS_CONTEXT = 5,
-	FONT_SIZE = 32,
-	// Gap of (3/4 * font_size) looks fine
-	FONT_LINE_HEIGHT = 3 * FONT_SIZE / 4,
-};
-constexpr static Vector2 REG_INFO_BOX_POS = {640, 320};
-constexpr static Vector2 INS_INFO_BOX_POS = {640, 0};
-constexpr static Vector2 CONTROL_BOX_POS = {0, 320};
+constexpr Color COLOR_SUPERDARK = {32, 32, 32, 255};
+constexpr Color COLOR_DIMBLUE = {40, 85, 125, 255};
 
-constexpr static Color COLOR_SUPERDARK{32, 32, 32, 255};
-constexpr static Color COLOR_DIMBLUE{40, 85, 125, 255};
+inline Vector2 get_rect_pos(Rectangle r) { return Vector2{r.x, r.y}; }
 
 static void fmt_registers(const Emulator &emu, vector<string> &reg_txts)
 {
@@ -114,6 +146,7 @@ static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
 		double amp = std::sin(wt * 600) / 2;
 		amp += std::sin(wt * 800) / 4;
 		amp += std::sin(wt * 300) / 4;
+
 		data[i] = amp * (INT16_MAX - 1);
 		t += 1.0 / double(SAMPLE_RATE);
 	}
@@ -134,142 +167,196 @@ int main(int argc, char const **argv)
 
 	// Only read upto 4K, that's max we need
 	uint8_t rom[C8_RAM_SIZE]{};
-	int bin_size
-		= rom_file.readsome(reinterpret_cast<char *>(rom), sizeof(rom));
+	int bin_size =
+		rom_file.readsome(reinterpret_cast<char *>(rom), sizeof(rom));
 	Emulator emu(rom, rom + bin_size);
 	if (!emu) {
-		clog << "Cannot initialize emulator\n";
+		clog << "Cannot initialize emulator.\n";
 		return 1;
 	}
 
-	// Init Raylib and configure it
+	// Initialization:
+	// Initialize Raylib, configure it and load resources.
+	//------------------------------------------------------
 	InitAudioDevice();
 	SetTraceLogLevel(LOG_WARNING);
 	SetConfigFlags(FLAG_MSAA_4X_HINT);
 	InitWindow(SCREEN_W, SCREEN_H, "Chip-8 emulator");
 	SetTargetFPS(60);
 
-	// 48kHz, 16-bit, mono-audio, generate audio
+	// 48kHz, 16-bit, mono-audio. Generate audio when requested.
 	AudioStream beep_stream = LoadAudioStream(SAMPLE_RATE, SAMPLE_SIZE, 1);
 	SetAudioStreamCallback(beep_stream, fill_audio_buffer_cb);
 
-	// Load Google Space-mono font
-	Font mono_font = LoadFontFromMemory(
+	// Load Google Space-mono font.
+	const Font mono_font = LoadFontFromMemory(
 		".ttf", SPACE_MONO_REGULAR_TTF, SPACE_MONO_REGULAR_TTF_LEN, FONT_SIZE,
 		nullptr, 0
 	);
+	const Font large_mono_font = LoadFontFromMemory(
+		".ttf", SPACE_MONO_REGULAR_TTF, SPACE_MONO_REGULAR_TTF_LEN,
+		LARGE_FONT_SIZE, nullptr, 0
+	);
+
 	auto draw_padded_font = [mono_font](const char *s, Vector2 pos, Color col) {
 		pos.x += float(2 * TEXT_PADDING);
 		pos.y += float(TEXT_PADDING);
 		DrawTextEx(mono_font, s, pos, FONT_SIZE, 0, col);
 	};
 
-	vector<string> regs_as_txt;
+	// Stores each register in format: <register_name> = <value>.
+	vector<string> registers_debug_text;
+	// Stores which keys are pressed for debug.
+	bool keys_down[C8_KEY_CNT]{};
+	// Easliest key in the list which was pressed.
+	int pressed_key = C8_KEY_NONE;
+
 	// State control
-	int ins_per_frame = 5;
+	int instr_per_frame = 5;
 	bool paused = false;
 
 	while (!WindowShouldClose()) {
 		// Handle key UI presses
 		//--------------------------------------------------
 		// Only change speed if not paused
-		if (!paused && IsKeyPressed(KEY_LEFT) && ins_per_frame > 1)
-			ins_per_frame--;
+		if (!paused && IsKeyPressed(KEY_LEFT) && instr_per_frame > 1)
+			instr_per_frame--;
 		else if (!paused && IsKeyPressed(KEY_RIGHT))
-			ins_per_frame++;
+			instr_per_frame++;
 		if (IsKeyPressed(KEY_SPACE))
 			paused = !paused;
 		else if (IsKeyPressed(KEY_ENTER))
 			emu = Emulator(rom, rom + bin_size);
+
+		// If multiple keys are pressed then for the emulator we register
+		// the key which was pressed earliest.
+		// Therefore, if the same key is still pressed then maintain it.
+		if (pressed_key != C8_KEY_NONE && IsKeyUp(C8_KEY_MAP[pressed_key]))
+			pressed_key = C8_KEY_NONE;
+
+		for (unsigned i = 0; i < ARRAY_SIZE(keys_down); ++i) {
+			keys_down[i] = IsKeyDown(C8_KEY_MAP[i]);
+
+			if (keys_down[i] && pressed_key == C8_KEY_NONE)
+				pressed_key = i;
+		}
 
 		// Start drawing things
 		//--------------------------------------------------
 		BeginDrawing();
 		ClearBackground(BLACK);
 
-		// Magic numbers!? See GUI-plan diagram above ^^^
-		// Register debug box, BLACK (Already painted background)
-		// Instruction debug box
-		DrawRectangle(640, 0, 320, 320, COLOR_SUPERDARK);
-		// Emulator screen
-		DrawRectangle(0, 0, 640, 320, COLOR_DIMBLUE);
-		// Control box
-		DrawRectangle(0, 320, 640, 320, DARKGRAY);
+		DrawRectangleRec(REG_DEBUG_BOX, BLACK);
+		DrawRectangleRec(INSTR_DEBUG_BOX, COLOR_SUPERDARK);
+		DrawRectangleRec(SCREEN_BOX, COLOR_DIMBLUE);
+		DrawRectangleRec(INFO_BOX, DARKGRAY);
+		DrawRectangleRec(KEY_PRESS_DEBUG_BOX, BLACK);
 
-		// Debug frequency, Lower left corner
-		auto hz_str = to_string(GetFPS() * ins_per_frame) + "Hz";
+		// Debug chip frequency(instructions per second), lower left corner.
+		auto hz_str = to_string(GetFPS() * instr_per_frame) + "Hz";
 		if (paused)
 			hz_str = "PAUSED";
 		draw_padded_font(
 			hz_str.c_str(), {SCREEN_W - 120, SCREEN_H - 60}, RAYWHITE
 		);
 
-		// Debug decoded instructions
-		for (int i = -INS_CONTEXT; i <= INS_CONTEXT; ++i) {
+		// Draw decoded instructions
+		for (int i = -INSTR_DECODE_CONTEXT; i <= INSTR_DECODE_CONTEXT; ++i) {
 			string ins_str;
 			auto new_pc = static_cast<long>(emu.pc) + C8_INS_LEN * i;
+
 			// If at RAM boundary, then just print '~'
 			if (new_pc < 0 || new_pc + C8_INS_LEN > C8_RAM_SIZE)
 				ins_str = "~";
 			else
 				ins_str = DecodedIns(emu.fetch_ins(new_pc)).to_string();
 
-			Vector2 pos = INS_INFO_BOX_POS;
-			pos.y += FONT_LINE_HEIGHT * (i + INS_CONTEXT);
-			// Highlight the current instruction GOLD
-			draw_padded_font(ins_str.c_str(), pos, (i == 0 ? GOLD : RED));
+			Vector2 pos = get_rect_pos(INSTR_DEBUG_BOX);
+			pos.y += FONT_LINE_HEIGHT * (i + INSTR_DECODE_CONTEXT);
+
+			// Highlight the current instruction in golden color.
+			Color color = i == 0 ? GOLD : RED;
+			draw_padded_font(ins_str.c_str(), pos, color);
 		}
 
-		// Debug registers
-		fmt_registers(emu, regs_as_txt);
-		for (unsigned i = 0; i < regs_as_txt.size(); ++i) {
-			Vector2 pos = REG_INFO_BOX_POS;
-			// Put registers V0-VB(10) in the first column, rest in the second
-			auto ypos_idx = i < 12 ? i : (i - 12);
-			pos.x += (i < 12 ? 0 : INFO_BOX_W / 2);
-			pos.y += ypos_idx * FONT_LINE_HEIGHT;
-			draw_padded_font(regs_as_txt[i].c_str(), pos, GREEN);
+		// Draw registers values
+		fmt_registers(emu, registers_debug_text);
+		for (unsigned i = 0; i < registers_debug_text.size(); ++i) {
+			Vector2 pos = get_rect_pos(REG_DEBUG_BOX);
+
+			// Put registers V0-VB(12) in the first column, rest in the second.
+			int row = i < 12 ? i : (i - 12);
+			pos.x += i < 12 ? 0 : (INFO_BOX.width / 2);
+			pos.y += row * FONT_LINE_HEIGHT;
+			draw_padded_font(registers_debug_text[i].c_str(), pos, GREEN);
 		}
+
+		// Draw key presses
+		for (unsigned i = 0; i < ARRAY_SIZE(keys_down); ++i) {
+			// We need a 4x4 grid.
+			Vector2 pos = get_rect_pos(KEY_PRESS_DEBUG_BOX);
+			pos.x += KEY_BLOCK_SIZE * (i % 4);
+			pos.y += KEY_BLOCK_SIZE * (i / 4);
+
+			auto [keycode, c8_key_name, key_name] = C8_KEY_NAME_MAP[i];
+			Color color = GRAY; // For keys not currently down.
+			if (keys_down[keycode])
+				color = MAROON; // For keys which are currently down.
+			if (pressed_key == keycode)
+				color = GOLD; // Key press which will be registered.
+
+			Rectangle border{pos.x, pos.y, KEY_BLOCK_SIZE, KEY_BLOCK_SIZE};
+			DrawRectangleLinesEx(border, 1., DARKGREEN);
+
+			// C8-keyname along with its mapped keyname as subscript.
+			pos.x += LARGE_TEXT_PADDING;
+			DrawTextEx(
+				large_mono_font, c8_key_name, pos, LARGE_FONT_SIZE, 0, color
+			);
+			pos = Vector2Add(pos, KEY_SUBSCRIPT_OFFSET);
+			DrawTextEx(mono_font, key_name, pos, FONT_SIZE, 0, color);
+		}
+		// So that outer border is also 2px thick.
+		DrawRectangleLinesEx(KEY_PRESS_DEBUG_BOX, 2., DARKGREEN);
 
 		// Draw the emulator screen
 		for (int y = 0; y < C8_SCREEN_HEIGHT; ++y) {
 			for (int x = 0; x < C8_SCREEN_WIDTH; ++x) {
 				if (!emu.pixel(x, y))
 					continue;
-				auto sz = BLOCK_SIZE;
+
+				auto sz = PIXEL_BLOCK_SIZE;
 				DrawRectangle(sz * x, sz * y, sz, sz, WHITE);
 			}
 		}
 
-		// Draw Help text
-		Vector2 pos = CONTROL_BOX_POS;
-		draw_padded_font("Left/Right Arrow    : Speed(-/+)", pos, RAYWHITE);
+		// Draw help text
+		Vector2 pos = get_rect_pos(INFO_BOX);
+		draw_padded_font("Left/Right: Speed(-/+)", pos, RAYWHITE);
 		pos.y += float(FONT_LINE_HEIGHT);
-		draw_padded_font("Space               : Play/Pause", pos, RAYWHITE);
+		draw_padded_font("Space     : Play/Pause", pos, RAYWHITE);
 		pos.y += float(FONT_LINE_HEIGHT);
-		draw_padded_font("Enter               : Reset", pos, RAYWHITE);
+		draw_padded_font("Enter     : Reset", pos, RAYWHITE);
 
 		EndDrawing();
 		//--------------------------------------------------
 
-		// Update emulator at last
+		// Update emulator at last.
 		//--------------------------------------------------
 		if (paused) {
 			PauseAudioStream(beep_stream);
-			emu.reset_clock(); // Stops timers while paused
+			emu.reset_clock(); // Stops timers while paused.
 			continue;
 		}
-		for (int i = 0; i < ins_per_frame; ++i) {
+
+		// Run code...
+		for (int i = 0; i < instr_per_frame; ++i) {
+			emu.key = static_cast<uint8_t>(pressed_key);
 			if (!emu.step())
-				clog << "Illegal instruction!\n";
+				clog << "Emulator: Illegal instruction!\n";
 		}
-		emu.key = C8_KEY_NONE;
-		for (int i = 0; i < C8_KEY_CNT; ++i) {
-			if (IsKeyDown(C8_KEY_MAP[i])) {
-				emu.key = i;
-				break;
-			}
-		}
+
+		// Beep play/pause as per sound timer.
 		if (emu.sound_timer() > 0)
 			PlayAudioStream(beep_stream);
 		else
@@ -282,6 +369,7 @@ int main(int argc, char const **argv)
 	UnloadAudioStream(beep_stream);
 	CloseAudioDevice();
 	UnloadFont(mono_font);
+	UnloadFont(large_mono_font);
 	CloseWindow();
 
 	return 0;
