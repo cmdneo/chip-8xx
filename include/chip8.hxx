@@ -31,7 +31,7 @@ enum Chip8Info {
 	C8_FONT_CNT = 16,
 };
 
-static constexpr std::uint8_t FONT_SPRITES[C8_FONT_CNT][C8_FONT_HEIGHT] = {
+constexpr std::uint8_t FONT_SPRITES[C8_FONT_CNT][C8_FONT_HEIGHT] = {
 	{0xF0, 0x90, 0x90, 0x90, 0xF0}, // 0
 	{0x20, 0x60, 0x20, 0x20, 0x70}, // 1
 	{0xF0, 0x10, 0xF0, 0x80, 0xF0}, // 2
@@ -103,15 +103,15 @@ enum class Directive {
 };
 
 /// @brief Register Mnemonics
-static constexpr std::string_view REGISTERS[] = {
-	"V0", "V1", "V2",  "V3",  "V4",  "V5",  "V6",  "V7",
+constexpr std::string_view REGISTERS[] = {
+	"V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7",
 	"V8", "V9", "VA", "VB", "VC", "VD", "VE", "VF",
 };
 
 /// @brief Instruction Mnemonics, ordered according to Instruction enum.
 /// Note that several instructions have same mnemonics,
 /// such instructions are further identified by their operands
-static constexpr std::string_view INSTRUCTIONS[] = {
+constexpr std::string_view INSTRUCTIONS[] = {
 	"CLS", "RET", "SYS", "JP",  "CALL", "SE",  "SNE", "SE",   "LD",
 	"ADD", "LD",  "OR",  "AND", "XOR",  "ADD", "SUB", "SHR",  "SUBN",
 	"SHL", "SNE", "LD",  "JP",  "RND",  "DRW", "SKP", "SKNP", "LD",
@@ -120,7 +120,7 @@ static constexpr std::string_view INSTRUCTIONS[] = {
 
 /// @brief Masked opcodes, ordered according to Instruction enum.
 /// All operand fields are zeroed out, so just OR opcode with the field
-static constexpr std::uint16_t OPCODES[] = {
+constexpr std::uint16_t OPCODES[] = {
 	0x00E0, 0x00EE, 0x0000, 0x1000, 0x2000, 0x3000, 0x4000, 0x5000, 0x6000,
 	0x7000, 0x8000, 0x8001, 0x8002, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007,
 	0x800E, 0x9000, 0xA000, 0xB000, 0xC000, 0xD000, 0xE09E, 0xE0A1, 0xF007,
@@ -128,7 +128,7 @@ static constexpr std::uint16_t OPCODES[] = {
 };
 
 /// @brief Directive mnemonics, ordered according to Directive enum
-static constexpr std::string_view DIRECTIVES[] = {
+constexpr std::string_view DIRECTIVES[] = {
 	"DB",
 	"DEFINE",
 };

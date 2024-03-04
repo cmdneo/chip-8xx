@@ -44,7 +44,7 @@ static map<string_view, uint16_t> INS_OPCODE_MAP = {
 	{"ADDI,v", 0xF01E},  {"LDF,v", 0xF029},   {"LDB,v", 0xF033},
 	{"LD[I],v", 0xF055}, {"LDv,[I]", 0xF065},
 };
-// static constexpr int INS_INFO_MAX_LEN = 8;
+// constexpr int INS_INFO_MAX_LEN = 8;
 
 #define LOG_ERR_GET(err_msg, val) (log_err((err_msg), (this->tok_span)), (val));
 
@@ -296,7 +296,6 @@ optional<int> Parser::parse_define()
 
 static bool is_ins_info_valid(string_view ins_info)
 {
-
 	for (const auto &kv : INS_OPCODE_MAP) {
 		if (kv.first.substr(0, ins_info.size()) == ins_info)
 			return true;
@@ -317,13 +316,12 @@ optional<Statement> Parser::parse_instruction()
 
 	// Construct the Instruction-Operand pattern string and match
 	while (1) {
-		auto valid = INS_OPCODE_MAP.find(ins_info);
-		if (valid != INS_OPCODE_MAP.end()) {
+		auto complete = INS_OPCODE_MAP.find(ins_info);
+		if (complete != INS_OPCODE_MAP.end()) {
 			ret.label_span = tok_span;
-			ret.opcode = valid->second;
+			ret.opcode = complete->second;
 			return ret;
 		}
-		// clog << ins_info << "\n";
 		if (!is_ins_info_valid(ins_info))
 			return LOG_ERR_GET("Illegal Token", nullopt);
 

@@ -81,7 +81,7 @@ For `define` directive `alias` should be an identifier and
 First replacements are performed in a line for aliases defined by define directive,
 then that line is processed.
 
-**WARNING**: If instructions are not aligned by 2-bytes then the behaviour is undefined.
+**WARNING**: If instructions are not aligned by 2-bytes then it is undefined behaviour.
 So when using `db` directive put even number of bytes, preferably at the end of the file.
 
 
