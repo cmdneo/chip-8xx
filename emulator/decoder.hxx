@@ -17,4 +17,4 @@ struct DecodedIns {
 	uint8_t nibble = 0;
 };
 
-#endif // END decoder.hxx
+#endif

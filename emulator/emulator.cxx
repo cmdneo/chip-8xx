@@ -32,14 +32,14 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 	std::random_device rdev;
 	rand_gen.seed(rdev());
 
-	// Start the clock from now!
+	// Start the clock now!
 	reset_clock();
 
-	// Copy fonts
+	// Copy fonts to the begining of ROM.
 	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
 	copy(fontp, fontp + sizeof(FONT_SPRITES), ram);
 
-	// Load program
+	// Load program into the RAM from the ROM provided.
 	copy(rom_beg, rom_end, ram + C8_PROG_START);
 }
 
@@ -233,7 +233,9 @@ bool Emulator::step()
 	}
 
 	switch (ins.type) {
-	// For branches(not single skips) and key_input instructions do nothing
+	// Branche instructions(except skip instructions) set PC themselves.
+	// Keypress instruction blocks until a keypress is detected and then
+	// it increments the PC. So for these cases do not touch PC.
 	case I::RET:
 	case I::JP_a:
 	case I::CALL_a:

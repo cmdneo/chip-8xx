@@ -16,8 +16,8 @@ static inline uint16_t getbits(uint16_t word, uint8_t offset, uint8_t n)
 DecodedIns::DecodedIns(uint16_t ins)
 {
 	using I = Instruction;
-	// For ms_nib == 0x8, data
-	constexpr static I ms_nib_x8_map[] = {
+	// For ms_opcode == 0x8, table driven classification.
+	constexpr I ms_opcode_x8_map[] = {
 		I::LD_v_v,  I::OR_v_v,  I::AND_v_v, I::XOR_v_v,
 		I::ADD_v_v, I::SUB_v_v, I::SHR_v,   I::SUBN_v_v,
 	};
@@ -38,9 +38,10 @@ DecodedIns::DecodedIns(uint16_t ins)
 	nibble = getbits(ins, 0, 4);
 	byte = getbits(ins, 0, 8);
 	type = I::ILLEGAL;
-	auto ms_nib = getbits(ins, 12, 4); // Most significant nibble
+	// Most significant opcode nibble
+	auto ms_opcode = getbits(ins, 12, 4);
 
-	switch (ms_nib) {
+	switch (ms_opcode) {
 	case 0x0:
 		if (ins == 0x00E0)
 			type = I::CLS;
@@ -74,7 +75,7 @@ DecodedIns::DecodedIns(uint16_t ins)
 
 	case 0x8:
 		if (nibble <= 0x7)
-			type = ms_nib_x8_map[nibble];
+			type = ms_opcode_x8_map[nibble];
 		else if (nibble == 0xE)
 			type = I::SHL_v;
 		break;
@@ -137,7 +138,7 @@ DecodedIns::DecodedIns(uint16_t ins)
 }
 
 /// @brief Instruction format string
-const static string INSTRUCTION_FMT[] = {
+static const string INSTRUCTION_FMT[] = {
 	"CLS",      "RET",      "SYS a",    "JP a",      "CALL a",    "SE x, b",
 	"SNE x, b", "SE x, y",  "LD x, b",  "ADD x, b",  "LD x, y",   "OR x, y",
 	"AND x, y", "XOR x, y", "ADD x, y", "SUB x, y",  "SHR x",     "SUBN x, y",
