@@ -1,8 +1,8 @@
-#ifndef CHIP8_EMULATOR_HXX_INCLUDED
-#define CHIP8_EMULATOR_HXX_INCLUDED
+#pragma once
 
 #include <cmath>
 #include <cstdint>
+#include <array>
 #include <random>
 #include <bitset>
 #include <chrono>
@@ -16,15 +16,14 @@ class Emulator
 {
 public:
 	Emulator(const uint8_t *rom_beg, const uint8_t *rom_end);
-	explicit operator bool() { return !error; }
+	explicit operator bool()const { return !error; }
 	bool step();
 	/// Resets the internal clock used for timers
 	void reset_clock() { last_time = std::chrono::steady_clock::now(); }
-	bool pixel(int x, int y) { return screen[y][x]; }
 
-	uint8_t delay_timer() const { return std::lround(dtimer); }
-	uint8_t sound_timer() const { return std::lround(stimer); }
-	uint16_t fetch_ins(uint16_t n) const { return (ram[n] << 8) | ram[n + 1]; }
+	[[nodiscard]] uint8_t delay_timer() const { return std::lround(dtimer); }
+	[[nodiscard]] uint8_t sound_timer() const { return std::lround(stimer); }
+	[[nodiscard]] uint16_t fetch_ins(uint16_t n) const { return (ram[n] << 8) | ram[n + 1]; }
 
 	// Direct access is needed for displaying info
 	uint16_t pc = C8_PROG_START;
@@ -32,17 +31,17 @@ public:
 	uint8_t sp = 0;
 	uint8_t regs[C8_REG_CNT]{};
 	uint8_t key = C8_KEY_NONE;
+	std::array<std::bitset<C8_SCREEN_WIDTH>, C8_SCREEN_HEIGHT> screen{};
 
 private:
 	bool error = false;
 	bool wait_for_key = false;
 	// Smoothly count down, and convert to uint8_t for use
-	float dtimer = 0;
-	float stimer = 0;
+	double dtimer = 0;
+	double stimer = 0;
 	uint8_t key_reg = 0;
 	uint16_t stack[C8_STACK_SIZE]{};
 	uint8_t ram[C8_RAM_SIZE]{};
-	std::bitset<C8_SCREEN_WIDTH> screen[C8_SCREEN_HEIGHT]{};
 	std::default_random_engine rand_gen;
 	std::chrono::steady_clock::time_point last_time;
 
@@ -52,4 +51,3 @@ private:
 	uint8_t add_with_ovf(uint8_t a, uint8_t b);
 };
 
-#endif // END emulator.hxx

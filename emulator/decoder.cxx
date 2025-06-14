@@ -1,4 +1,3 @@
-#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -8,7 +7,7 @@
 using std::string;
 using std::string_view;
 
-static inline uint16_t getbits(uint16_t word, uint8_t offset, uint8_t n)
+static inline uint16_t get_bits(uint16_t word, uint8_t offset, uint8_t n)
 {
 	return (word >> offset) & ~(~0U << n);
 }
@@ -32,16 +31,15 @@ DecodedIns::DecodedIns(uint16_t ins)
 	// Symbols: x - Vx,   y - Vy,     o - opcode
 	//          b - byte, n - nibble, a - address
 	bincode = ins;
-	vx = getbits(ins, C8_VX_OFFSET, 4);
-	vy = getbits(ins, C8_VY_OFFSET, 4);
-	addr = getbits(ins, 0, 12);
-	nibble = getbits(ins, 0, 4);
-	byte = getbits(ins, 0, 8);
+	vx = get_bits(ins, C8_VX_OFFSET, 4);
+	vy = get_bits(ins, C8_VY_OFFSET, 4);
+	addr = get_bits(ins, 0, 12);
+	nibble = get_bits(ins, 0, 4);
+	byte = get_bits(ins, 0, 8);
 	type = I::ILLEGAL;
 	// Most significant opcode nibble
-	auto ms_opcode = getbits(ins, 12, 4);
 
-	switch (ms_opcode) {
+	switch (get_bits(ins, 12, 4)) {
 	case 0x0:
 		if (ins == 0x00E0)
 			type = I::CLS;
@@ -132,7 +130,14 @@ DecodedIns::DecodedIns(uint16_t ins)
 		case 0x65:
 			type = I::LD_v_IM;
 			break;
+		default:
+			type = I::ILLEGAL;
+			break;
 		}
+		break;
+
+	default:
+		type = I::ILLEGAL;
 		break;
 	}
 }
@@ -155,7 +160,7 @@ static void replace_char(string &s, char old, string_view new_)
 	}
 }
 
-string DecodedIns::to_string()
+string DecodedIns::to_string() const
 {
 	if (type == Instruction::ILLEGAL)
 		return "<! DECODING ERROR !>";

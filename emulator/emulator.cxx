@@ -9,16 +9,14 @@
 #include "emulator.hxx"
 #include "decoder.hxx"
 
-using std::array;
-using std::begin;
-using std::copy;
-using std::end;
 using std::uint8_t;
 using std::chrono::steady_clock;
 
-static std::uniform_int_distribution<unsigned> random_byte_distbr(0, 255);
+static std::uniform_int_distribution<unsigned> random_byte_dist(0, 255);
+static std::random_device rand_device;
 
 Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
+	: rand_gen(rand_device())
 {
 	constexpr auto rom_max = C8_RAM_SIZE - C8_PROG_START;
 	if (rom_end - rom_beg > rom_max) {
@@ -28,25 +26,21 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 		return;
 	}
 
-	// Seed the random number generator
-	std::random_device rdev;
-	rand_gen.seed(rdev());
-
 	// Start the clock now!
 	reset_clock();
 
-	// Copy fonts to the begining of ROM.
-	auto fontp = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
-	copy(fontp, fontp + sizeof(FONT_SPRITES), ram);
+	// Copy fonts to the beginning of ROM.
+	const auto font_ptr = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
+	std::copy_n(font_ptr, sizeof(FONT_SPRITES), ram);
 
 	// Load program into the RAM from the ROM provided.
-	copy(rom_beg, rom_end, ram + C8_PROG_START);
+	std::copy(rom_beg, rom_end, ram + C8_PROG_START);
 }
 
 bool Emulator::step()
 {
 	using I = Instruction;
-	std::chrono::duration<double> dt = steady_clock::now() - last_time;
+	const std::chrono::duration<double> dt = steady_clock::now() - last_time;
 	last_time = steady_clock::now();
 	update_timers(dt.count());
 
@@ -72,7 +66,7 @@ bool Emulator::step()
 
 	switch (ins.type) {
 	case I::CLS:
-		std::fill(begin(screen), end(screen), 0);
+		std::ranges::fill(screen, 0);
 		break;
 
 	case I::RET:
@@ -168,7 +162,7 @@ bool Emulator::step()
 		break;
 
 	case I::RND_v_b:
-		vvx = random_byte_distbr(rand_gen) & ins.byte;
+		vvx = random_byte_dist(rand_gen) & ins.byte;
 		break;
 
 	case I::DRW_v_v_n:
@@ -229,12 +223,11 @@ bool Emulator::step()
 
 	case I::ILLEGAL:
 		return false;
-		break;
 	}
 
 	switch (ins.type) {
-	// Branche instructions(except skip instructions) set PC themselves.
-	// Keypress instruction blocks until a keypress is detected and then
+	// Branch instructions(except skip instructions) set PC themselves.
+	// Keypress instruction blocks until a keypress is detected, and then
 	// it increments the PC. So for these cases do not touch PC.
 	case I::RET:
 	case I::JP_a:

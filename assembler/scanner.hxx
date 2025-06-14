@@ -1,5 +1,4 @@
-#ifndef ASSEMBLER_SCANNER_HXX_INCLUDED
-#define ASSEMBLER_SCANNER_HXX_INCLUDED
+#pragma once
 
 #include <cassert>
 #include <string_view>
@@ -8,7 +7,7 @@
 class Scanner
 {
 public:
-	Scanner(std::string_view s = "")
+	explicit Scanner(const std::string_view s = "")
 		: remaining(s)
 		, original(s)
 	{
@@ -16,15 +15,15 @@ public:
 			cur = remaining[0];
 	}
 
-	int cursor() const { return cursor_at; }
+	[[nodiscard]] int cursor() const { return cursor_at; }
 
-	bool is_at_end() const { return remaining.empty(); }
+	[[nodiscard]] bool is_at_end() const { return remaining.empty(); }
 
-	char prev() const { return pre; }
+	[[nodiscard]] char prev() const { return pre; }
 
-	char first() const { return cur; }
+	[[nodiscard]] char first() const { return cur; }
 
-	char second() const
+	[[nodiscard]] char second() const
 	{
 		if (remaining.size() > 1)
 			return remaining[1];
@@ -47,7 +46,7 @@ public:
 		}
 	}
 
-	std::string_view skip_while(std::function<bool(char)> unary_pred)
+	std::string_view skip_while(const std::function<bool(char)> &unary_pred)
 	{
 		auto ret = remaining;
 		int cnt = 0;
@@ -66,7 +65,5 @@ private:
 	std::string_view original;
 	char cur = EOF_CHAR;
 	char pre = EOF_CHAR;
-	std::string_view::size_type cursor_at = 0;
+	int cursor_at = 0;
 };
-
-#endif // END scanner.hxx

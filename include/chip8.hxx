@@ -1,35 +1,29 @@
-#ifndef INCLUDE_COMMON_CHIP8_HXX_INCLUDED
-#define INCLUDE_COMMON_CHIP8_HXX_INCLUDED
+#pragma once
 
 #include <cstdint>
 #include <map>
 #include <string_view>
 
-enum Chip8Info {
-	C8_TIMER_FREQ = 60,
-	C8_KEY_NONE = 16, // Valid keys are [0-15]
-	C8_KEY_CNT = 16,
-	C8_FLAG_REG = 15,
+int constexpr C8_TIMER_FREQ = 60;
+int constexpr C8_KEY_NONE = 16; // Valid keys are [0-15]
+int constexpr C8_KEY_CNT = 16;
+int constexpr C8_FLAG_REG = 15;
 
-	C8_SCREEN_WIDTH = 64,
-	C8_SCREEN_HEIGHT = 32,
+int constexpr C8_SCREEN_WIDTH = 64;
+int constexpr C8_SCREEN_HEIGHT = 32;
 
-	// All immediates have zero offset
-	C8_VX_OFFSET = 8,
-	C8_VY_OFFSET = 4,
-
-	C8_INS_LEN = 2,
-	C8_REG_CNT = 16,
-	C8_PROG_START = 0x200,
-	C8_STACK_SIZE = 16,
-	C8_RAM_SIZE = 4096,
-	C8_ADDR_MAX = C8_RAM_SIZE - 1,
-	C8_BYTE_MAX = 255,
-	C8_NIBBLE_MAX = 15,
-
-	C8_FONT_HEIGHT = 5,
-	C8_FONT_CNT = 16,
-};
+int constexpr C8_VX_OFFSET = 8;
+int constexpr C8_VY_OFFSET = 4;
+int constexpr C8_INS_LEN = 2;
+int constexpr C8_REG_CNT = 16;
+int constexpr C8_PROG_START = 0x200;
+int constexpr C8_STACK_SIZE = 16;
+int constexpr C8_RAM_SIZE = 4096;
+int constexpr C8_ADDR_MAX = C8_RAM_SIZE - 1;
+int constexpr C8_BYTE_MAX = 255;
+int constexpr C8_NIBBLE_MAX = 15;
+int constexpr C8_FONT_HEIGHT = 5;
+int constexpr C8_FONT_CNT = 16;
 
 constexpr std::uint8_t FONT_SPRITES[C8_FONT_CNT][C8_FONT_HEIGHT] = {
 	{0xF0, 0x90, 0x90, 0x90, 0xF0}, // 0
@@ -132,5 +126,3 @@ constexpr std::string_view DIRECTIVES[] = {
 	"DB",
 	"DEFINE",
 };
-
-#endif

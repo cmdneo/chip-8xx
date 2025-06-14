@@ -8,7 +8,7 @@
 
 // Generated using xxd and then some minor formatting
 // Generated from Space-Mono-Regular.ttf for basic_latin,
-// range [0x0020-0x007E]. Useful for embeding it into binary
+// range [0x0020-0x007E]. Useful for embedding it into a binary.
 static const unsigned char SPACE_MONO_REGULAR_TTF[] = {
 	0x00,0x01,0x00,0x00,0x00,0x0d,0x00,0x80,0x00,0x03,0x00,0x50,
 	0x46,0x46,0x54,0x4d,0x99,0x65,0x8f,0x93,0x00,0x00,0x34,0x14,
@@ -1126,7 +1126,6 @@ static const unsigned char SPACE_MONO_REGULAR_TTF[] = {
 	0xdf,0x88,0xfa,0xd1
 };
 
-static unsigned int SPACE_MONO_REGULAR_TTF_LEN = sizeof(SPACE_MONO_REGULAR_TTF);
-// unsigned int SPACE_MONO_REGULAR_TTF_LEN = 13360;
+static unsigned long SPACE_MONO_REGULAR_TTF_LEN = sizeof(SPACE_MONO_REGULAR_TTF);
 
 #endif
