@@ -54,12 +54,12 @@ public:
 		matching.set();
 	}
 
-	std::optional<Instruction> get_matched_rule() { return matched; }
+	auto get_matched_rule() -> std::optional<Instruction> { return matched; }
 
 	/// @brief Try matching the token and advance if matched.
 	/// @param tok Token
 	/// @return Match type.
-	Matched try_next(Token tok);
+	auto try_next(Token tok) -> Matched;
 
 private:
 	unsigned match_count = 0;
@@ -76,19 +76,19 @@ public:
 	{
 	}
 
-	std::optional<std::vector<u8>> parse_and_assemble();
+	auto parse_and_assemble() -> std::optional<std::vector<u8>>;
 
 private:
-	Result parse_statement();
-	Result parse_instruction();
-	Result parse_label();
-	Result parse_define();
-	Result parse_db();
+	auto parse_statement() -> Result;
+	auto parse_instruction() -> Result;
+	auto parse_label() -> Result;
+	auto parse_define() -> Result;
+	auto parse_db() -> Result;
 
-	Result expect(TokenKind kind, std::optional<int> value = {});
-	bool match_advance(TokenKind kind, std::optional<int> value = {});
-	bool match(TokenKind kind, std::optional<int> value = {});
-	Token advance();
+	auto expect(TokenKind kind, std::optional<int> value = {}) -> Result;
+	auto match_advance(TokenKind kind, std::optional<int> value = {}) -> bool;
+	auto match(TokenKind kind, std::optional<int> value = {}) -> bool;
+	auto advance() -> Token;
 
 	void add_statement(Statement stmt);
 	void log_err(std::string_view msg, Token at);

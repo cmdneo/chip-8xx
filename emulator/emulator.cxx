@@ -10,6 +10,7 @@
 #include "emulator.hxx"
 #include "decoder.hxx"
 
+using std::uint16_t;
 using std::uint8_t;
 using std::chrono::steady_clock;
 
@@ -33,13 +34,13 @@ Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 
 	// Copy fonts to the beginning of ROM.
 	const auto font_ptr = reinterpret_cast<const uint8_t *>(FONT_SPRITES);
-	std::copy_n(font_ptr, sizeof(FONT_SPRITES), ram);
+	std::ranges::copy_n(font_ptr, sizeof(FONT_SPRITES), ram.begin());
 
 	// Load program into the RAM from the ROM provided.
-	std::copy(rom_beg, rom_end, ram + C8_PROG_START);
+	std::ranges::copy(rom_beg, rom_end, ram.begin() + C8_PROG_START);
 }
 
-bool Emulator::step()
+auto Emulator::step() -> bool
 {
 	using I = Instruction;
 	const std::chrono::duration<double> dt = steady_clock::now() - last_time;
@@ -89,18 +90,21 @@ bool Emulator::step()
 		break;
 
 	case I::SE_v_b:
-		if (vvx == ins.byte)
+		if (vvx == ins.byte) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::SNE_v_b:
-		if (vvx != ins.byte)
+		if (vvx != ins.byte) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::SE_v_v:
-		if (vvx == vvy)
+		if (vvx == vvy) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::LD_v_b:
@@ -151,8 +155,9 @@ bool Emulator::step()
 		break;
 
 	case I::SNE_v_v:
-		if (vvx != vvy)
+		if (vvx != vvy) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::LD_I_a:
@@ -172,13 +177,15 @@ bool Emulator::step()
 		break;
 
 	case I::SKP_v:
-		if (key != C8_KEY_NONE && vvx == key)
+		if (key != C8_KEY_NONE && vvx == key) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::SKNP_v:
-		if (key == C8_KEY_NONE || vvx != key)
+		if (key == C8_KEY_NONE || vvx != key) {
 			pc += C8_INSTR_LEN;
+		}
 		break;
 
 	case I::LD_v_DT:
@@ -214,13 +221,15 @@ bool Emulator::step()
 		break;
 
 	case I::LD_IM_v:
-		for (unsigned i = 0; i <= ins.vx; ++i)
+		for (unsigned i = 0; i <= ins.vx; ++i) {
 			ram[(index + i) % C8_RAM_SIZE] = regs[i];
+		}
 		break;
 
 	case I::LD_v_IM:
-		for (unsigned i = 0; i <= ins.vx; ++i)
+		for (unsigned i = 0; i <= ins.vx; ++i) {
 			regs[i] = ram[(index + i) % C8_RAM_SIZE];
+		}
 		break;
 
 	case I::ILLEGAL:
@@ -261,8 +270,9 @@ void Emulator::draw_sprite(uint8_t x, uint8_t y, uint8_t height)
 			auto img_px = (ram[(index + i) % C8_RAM_SIZE] >> (7 - j)) & 1;
 			uint8_t new_px = screen[yf][xf] ^ img_px;
 
-			if (screen[yf][xf] && !new_px)
+			if (screen[yf][xf] && !new_px) {
 				collision = true;
+			}
 			screen[yf][xf] = new_px;
 		}
 	}
@@ -274,13 +284,15 @@ void Emulator::update_timers(double dt)
 {
 	stimer -= dt * C8_TIMER_FREQ;
 	dtimer -= dt * C8_TIMER_FREQ;
-	if (stimer < 0)
+	if (stimer < 0) {
 		stimer = 0;
-	if (dtimer < 0)
+	}
+	if (dtimer < 0) {
 		dtimer = 0;
+	}
 }
 
-uint8_t Emulator::add_with_ovf(uint8_t a, uint8_t b)
+auto Emulator::add_with_ovf(uint8_t a, uint8_t b) -> uint8_t
 {
 	// Usigned overflow is well-defined in C++
 	uint8_t s = a + b;

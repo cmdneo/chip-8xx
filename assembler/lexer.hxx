@@ -42,17 +42,18 @@ struct Token {
 		return kind != TokenKind::Eof && kind != TokenKind::Invalid;
 	}
 
-	std::string as_debug(bool use_value = true) const
+	[[nodiscard]] auto as_debug(bool use_value = true) const -> std::string
 	{
-		constexpr std::string_view MNEMONICS[] = {
+		constexpr std::array<std::string_view, 11> MNEMONICS = {
 			"Invalid",     "Db",        "Define",
 			"Instruction", "Register",  "SpecialRegister",
 			"Identifier",  "Immediate", "Char",
 			"Raw",         "Eof",
 		};
 		const auto name = MNEMONICS[static_cast<int>(kind)];
-		if (!use_value)
+		if (!use_value) {
 			return std::format("[{}]", name);
+		}
 
 		switch (kind) {
 		case TokenKind::Char:
@@ -75,7 +76,7 @@ struct Token {
 	}
 };
 
-inline Token make_token(TokenKind kind, int value = 0)
+inline auto make_token(TokenKind kind, int value = 0) -> Token
 {
 	return Token{
 		.lexeme = "",
@@ -95,21 +96,24 @@ public:
 	{
 	}
 
-	Token next();
+	auto next() -> Token;
 	void set_next_token_as_line() { next_token_as_line = true; }
 
 private:
-	Token next_token();
-	Token immediate();
-	Token identifier();
-	Token macro_token();
+	auto next_token() -> Token;
+	auto immediate() -> Token;
+	auto identifier() -> Token;
+	auto macro_token() -> Token;
 	void skip_blanks();
 
-	char peekc(unsigned adv = 0) const;
-	char nextc();
+	[[nodiscard]] auto peekc(unsigned adv = 0) const -> char;
+	auto nextc() -> char;
 
-	bool is_at_end() const { return at == source.length(); }
-	std::string_view current_lexeme() const
+	[[nodiscard]] auto is_at_end() const -> bool
+	{
+		return at == source.length();
+	}
+	[[nodiscard]] auto current_lexeme() const -> std::string_view
 	{
 		return source.substr(start, at - start);
 	}
@@ -123,7 +127,7 @@ private:
 	unsigned column = 1;
 };
 
-inline bool icase_equals(std::string_view s, std::string_view t)
+inline auto icase_equals(std::string_view s, std::string_view t) -> bool
 {
 	return std::ranges::equal(s, t, [](auto c, auto d) {
 		return std::tolower(c) == std::tolower(d);

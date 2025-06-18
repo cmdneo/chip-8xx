@@ -1,3 +1,4 @@
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -7,46 +8,47 @@
 using std::string;
 using std::string_view;
 
-static inline uint16_t get_bits(uint16_t word, uint8_t offset, uint8_t n)
+static inline auto get_bits(uint16_t word, uint8_t offset, uint8_t n)
+	-> uint16_t
 {
 	return (word >> offset) & ~(~0U << n);
 }
 
+// Refer chip8.md for info about instruction encoding
+// Encoding formats (MSB left):
+// oooo xxxx yyyy oooo
+// oooo aaaa aaaa aaaa
+// oooo xxxx oooo oooo
+// oooo xxxx bbbb bbbb
+// oooo xxxx yyyy nnnn
+// Symbols: x - Vx,   y - Vy,     o - opcode
+//          b - byte, n - nibble, a - address
 DecodedIns::DecodedIns(uint16_t ins)
+	: bincode(ins)
+	, addr(get_bits(ins, 0, 12))
+	, vx(get_bits(ins, C8_VX_OFFSET, 4))
+	, vy(get_bits(ins, C8_VY_OFFSET, 4))
+	, byte(get_bits(ins, 0, 8))
+	, nibble(get_bits(ins, 0, 4))
+
 {
 	using I = Instruction;
 	// For ms_opcode == 0x8, table driven classification.
-	constexpr I ms_opcode_x8_map[] = {
+	constexpr std::array<I, 8> ms_opcode_x8_map = {
 		I::LD_v_v,  I::OR_v_v,  I::AND_v_v, I::XOR_v_v,
 		I::ADD_v_v, I::SUB_v_v, I::SHR_v,   I::SUBN_v_v,
 	};
 
-	// Refer chip8.md for info about instruction encoding
-	// Encoding formats (MSB left):
-	// oooo xxxx yyyy oooo
-	// oooo aaaa aaaa aaaa
-	// oooo xxxx oooo oooo
-	// oooo xxxx bbbb bbbb
-	// oooo xxxx yyyy nnnn
-	// Symbols: x - Vx,   y - Vy,     o - opcode
-	//          b - byte, n - nibble, a - address
-	bincode = ins;
-	vx = get_bits(ins, C8_VX_OFFSET, 4);
-	vy = get_bits(ins, C8_VY_OFFSET, 4);
-	addr = get_bits(ins, 0, 12);
-	nibble = get_bits(ins, 0, 4);
-	byte = get_bits(ins, 0, 8);
-	type = I::ILLEGAL;
 	// Most significant opcode nibble
-
 	switch (get_bits(ins, 12, 4)) {
 	case 0x0:
-		if (ins == 0x00E0)
+		if (ins == 0x00E0) {
 			type = I::CLS;
-		else if (ins == 0x00EE)
+		} else if (ins == 0x00EE) {
 			type = I::RET;
-		else
+		} else {
 			type = I::SYS_a;
+		}
 		break;
 
 	case 0x1:
@@ -72,10 +74,11 @@ DecodedIns::DecodedIns(uint16_t ins)
 		break;
 
 	case 0x8:
-		if (nibble <= 0x7)
+		if (nibble <= 0x7) {
 			type = ms_opcode_x8_map[nibble];
-		else if (nibble == 0xE)
+		} else if (nibble == 0xE) {
 			type = I::SHL_v;
+		}
 		break;
 
 	case 0x9:
@@ -95,10 +98,11 @@ DecodedIns::DecodedIns(uint16_t ins)
 		break;
 
 	case 0xe:
-		if (byte == 0x9E)
+		if (byte == 0x9E) {
 			type = I::SKP_v;
-		else if (byte == 0xA1)
+		} else if (byte == 0xA1) {
 			type = I::SKNP_v;
+		}
 		break;
 
 	case 0xf:
@@ -150,10 +154,11 @@ static void replace_char(string &s, char old, string_view replacement)
 	}
 }
 
-string DecodedIns::to_string() const
+auto DecodedIns::to_string() const -> string
 {
-	if (type == Instruction::ILLEGAL)
+	if (type == Instruction::ILLEGAL) {
 		return "<! DECODING ERROR !>";
+	}
 
 	auto ret = string(INSTRUCTION_FORMATS[static_cast<int>(type)]);
 	replace_char(ret, 'a', std::to_string(addr));

@@ -6,21 +6,23 @@
 #include "chip8.hxx"
 #include "lexer.hxx"
 
-Token Lexer::next()
+auto Lexer::next() -> Token
 {
-	if (!next_token_as_line)
+	if (!next_token_as_line) {
 		return next_token();
+	}
 
 	next_token_as_line = false;
 	skip_blanks();
 
-	Position pos{line, column};
+	Position pos{.line = line, .column = column};
 	auto tok = make_token(TokenKind::Raw);
 	start = at;
 	for (;;) {
 		auto c = peekc();
-		if (is_at_end() || c == ';' || c == '\n')
+		if (is_at_end() || c == ';' || c == '\n') {
 			break;
+		}
 		nextc();
 	}
 
@@ -29,13 +31,14 @@ Token Lexer::next()
 	return tok;
 }
 
-Token Lexer::next_token()
+auto Lexer::next_token() -> Token
 {
 	skip_blanks();
 	if (peekc() == ';') {
 		// Discard comment line
-		while (!is_at_end() && peekc() != '\n')
+		while (!is_at_end() && peekc() != '\n') {
 			nextc();
+		}
 	}
 
 	Token ret{};
@@ -43,51 +46,59 @@ Token Lexer::next_token()
 	char c = peekc();
 	start = at;
 
-	if (is_at_end())
+	if (is_at_end()) {
 		ret = make_token(TokenKind::Eof);
-	else if (std::isdigit(c) || c == '+' || c == '-')
+	} else if (std::isdigit(c) || c == '+' || c == '-') {
 		ret = immediate();
-	else if (std::isalpha(c) || c == '_')
+	} else if (std::isalpha(c) || c == '_') {
 		ret = identifier();
-	else if (c == '%' && (std::isalpha(peekc(1)) || peekc(1) == '_'))
+	} else if (c == '%' && (std::isalpha(peekc(1)) || peekc(1) == '_')) {
 		ret = macro_token();
-	else
+	} else {
 		ret = make_token(TokenKind::Char, nextc());
+	}
 
 	ret.pos = pos;
 	ret.lexeme = current_lexeme();
 	return ret;
 }
 
-static std::optional<int> char_to_idigit(char c)
+static auto char_to_idigit(char c) -> std::optional<int>
 {
 	int v = std::tolower(c);
-	if ('0' <= v && v <= '9')
+	if ('0' <= v && v <= '9') {
 		return v - '0';
-	if ('a' <= v && v <= 'z')
+	}
+	if ('a' <= v && v <= 'z') {
 		return v - 'a' + 10;
+	}
 	return {};
 }
 
-static std::optional<int> mul_add_checked(int a, int b, int c)
+static auto mul_add_checked(int a, int b, int c) -> std::optional<int>
 {
 	// Signed overflow is UB, so check for overflow before computing.
-	if (((a > 0 && b > 0) || (a < 0 && b < 0)) && b > INT_MAX / a)
+	if (((a > 0 && b > 0) || (a < 0 && b < 0)) && b > INT_MAX / a) {
 		return {};
-	if (a < 0 && b > 0 && a < INT_MIN / b)
+	}
+	if (a < 0 && b > 0 && a < INT_MIN / b) {
 		return {};
-	if (a > 0 && b < 0 && b < INT_MIN / a)
+	}
+	if (a > 0 && b < 0 && b < INT_MIN / a) {
 		return {};
+	}
 	a *= b;
 
-	if (a > 0 && c > 0 && a > INT_MAX - c)
+	if (a > 0 && c > 0 && a > INT_MAX - c) {
 		return {};
-	if (a < 0 && c < 0 && a < INT_MIN - c)
+	}
+	if (a < 0 && c < 0 && a < INT_MIN - c) {
 		return {};
+	}
 	return a + c;
 }
 
-Token Lexer::immediate()
+auto Lexer::immediate() -> Token
 {
 	int base = 10;
 	bool is_neg = false;
@@ -100,94 +111,114 @@ Token Lexer::immediate()
 
 	if (peekc() == '0') {
 		char c = std::tolower(peekc(1));
-		if (c == 'x')
+		if (c == 'x') {
 			base = 16;
-		else if (c == 'b')
+		} else if (c == 'b') {
 			base = 2;
-		else if (c == 'o')
+		} else if (c == 'o') {
 			base = 8;
+		}
 	}
 	// Eat base prefix if present, and if nothing is after it then error.
 	if (base != 10) {
 		nextc();
 		nextc();
-		if (!std::isalnum(peekc()))
+		if (!std::isalnum(peekc())) {
 			return make_token(TokenKind::Invalid);
+		}
 	}
 
 	while (auto c = peekc()) {
-		if (!std::isalnum(c))
+		if (!std::isalnum(c)) {
 			break;
+		}
 		auto digit = char_to_idigit(c);
-		if (!digit || *digit >= base)
+		if (!digit || *digit >= base) {
 			return make_token(TokenKind::Invalid);
+		}
 		auto res = mul_add_checked(ret, base, *digit);
-		if (!res)
+		if (!res) {
 			return make_token(TokenKind::Invalid);
+		}
 
 		ret = *res;
 		nextc();
 	}
 
-	if (is_neg)
+	if (is_neg) {
 		ret = -ret;
+	}
 	return make_token(TokenKind::Immediate, ret);
 }
 
-inline bool is_ident_tail_char(char c) { return std::isalnum(c) || c == '_'; }
-
-Token Lexer::identifier()
+inline auto is_ident_tail_char(char c) -> bool
 {
-	while (is_ident_tail_char(peekc()))
+	return std::isalnum(c) || c == '_';
+}
+
+auto Lexer::identifier() -> Token
+{
+	while (is_ident_tail_char(peekc())) {
 		nextc();
+	}
 
 	auto icase_match = [ident = current_lexeme()](std::string_view s) {
 		return icase_equals(ident, s);
 	};
 	auto find_ident_in = [&](const auto &arr) -> int {
-		if (auto r = std::ranges::find_if(arr, icase_match); r != std::end(arr))
+		if (auto r = std::ranges::find_if(arr, icase_match);
+			r != std::end(arr)) {
 			return r - arr;
+		}
 		return -1;
 	};
 
-	if (icase_match("db"))
+	if (icase_match("db")) {
 		return make_token(TokenKind::Db);
-	if (find_ident_in(INSTRUCTIONS) >= 0)
+	}
+	if (find_ident_in(INSTRUCTIONS) >= 0) {
 		return make_token(TokenKind::Instruction);
-	if (auto r = find_ident_in(REGISTERS); r >= 0)
+	}
+	if (auto r = find_ident_in(REGISTERS); r >= 0) {
 		return make_token(TokenKind::Register, r);
-	if (auto r = find_ident_in(SPECIAL_REGISTERS); r >= 0)
+	}
+	if (auto r = find_ident_in(SPECIAL_REGISTERS); r >= 0) {
 		return make_token(TokenKind::SpecialRegister);
+	}
 	return make_token(TokenKind::Identifier);
 }
 
-Token Lexer::macro_token()
+auto Lexer::macro_token() -> Token
 {
 	nextc(); // eat '%'
-	while (is_ident_tail_char(peekc()))
+	while (is_ident_tail_char(peekc())) {
 		nextc();
+	}
 	auto ident = current_lexeme();
 
-	if (icase_equals(ident, "%define"))
+	if (icase_equals(ident, "%define")) {
 		return make_token(TokenKind::Define);
+	}
 	return make_token(TokenKind::Invalid);
 }
 
 void Lexer::skip_blanks()
 {
-	while (std::isblank(peekc()))
+	while (std::isblank(peekc())) {
 		nextc();
+	}
 }
 
-char Lexer::peekc(unsigned adv) const
+auto Lexer::peekc(unsigned adv) const -> char
 {
 	return adv + at >= source.length() ? '\0' : source[at + adv];
 }
 
-char Lexer::nextc()
+auto Lexer::nextc() -> char
 {
-	if (is_at_end())
+	if (is_at_end()) {
 		return '\0';
+	}
 
 	char ret = source[at++];
 	if (ret == '\n') {

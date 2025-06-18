@@ -5,13 +5,13 @@
 
 struct DecodedIns {
 	explicit DecodedIns(uint16_t ins);
-	[[nodiscard]] std::string to_string() const;
+	[[nodiscard]] auto to_string() const -> std::string;
 
 	Instruction type = Instruction::ILLEGAL;
-	uint16_t bincode = 0;
-	uint16_t addr = 0;
-	uint8_t vx = 0;
-	uint8_t vy = 0;
-	uint8_t byte = 0;
-	uint8_t nibble = 0;
+	uint16_t bincode{};
+	uint16_t addr{};
+	uint8_t vx{};
+	uint8_t vy{};
+	uint8_t byte{};
+	uint8_t nibble{};
 };

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <array>
 #include <iostream>
+#include <iterator>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -113,7 +114,7 @@ enum AudioConfig {
 constexpr Color COLOR_SUPER_DARK = {32, 32, 32, 255};
 constexpr Color COLOR_DIM_BLUE = {40, 85, 125, 255};
 
-inline Vector2 get_rect_pos(Rectangle r) { return Vector2{r.x, r.y}; }
+inline auto get_rect_pos(Rectangle r) -> Vector2 { return Vector2{r.x, r.y}; }
 
 static void fmt_registers(const Emulator &emu, vector<string> &reg_texts)
 {
@@ -131,11 +132,13 @@ static void fmt_registers(const Emulator &emu, vector<string> &reg_texts)
 	reg_texts.clear();
 
 	// Registers V0-VF
-	for (int i = 0; i < C8_REG_CNT; ++i)
+	for (int i = 0; i < C8_REG_CNT; ++i) {
 		reg_texts.push_back(fmt_reg(string(REGISTERS[i]), emu.regs[i]));
+	}
 	// Internal Registers
-	for (auto &[name, val] : INTERNAL_REG_VALS)
+	for (auto &[name, val] : INTERNAL_REG_VALS) {
 		reg_texts.push_back(fmt_reg(name, val));
+	}
 }
 
 static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
@@ -154,7 +157,7 @@ static void fill_audio_buffer_cb(void *raw_data, unsigned frames)
 	}
 }
 
-int main(int argc, char const **argv)
+auto main(int argc, char const **argv) -> int
 {
 	if (argc != 2) {
 		auto name = argc > 0 ? argv[0] : "c8asm";
@@ -225,26 +228,30 @@ int main(int argc, char const **argv)
 		// Handle key UI presses
 		//--------------------------------------------------
 		// Only change speed if not paused
-		if (!paused && IsKeyPressed(KEY_LEFT) && instr_per_frame > 1)
+		if (!paused && IsKeyPressed(KEY_LEFT) && instr_per_frame > 1) {
 			instr_per_frame--;
-		else if (!paused && IsKeyPressed(KEY_RIGHT))
+		} else if (!paused && IsKeyPressed(KEY_RIGHT)) {
 			instr_per_frame++;
-		if (IsKeyPressed(KEY_SPACE))
+		}
+		if (IsKeyPressed(KEY_SPACE)) {
 			paused = !paused;
-		else if (IsKeyPressed(KEY_ENTER))
+		} else if (IsKeyPressed(KEY_ENTER)) {
 			emu = Emulator(rom_begin, rom_end);
+		}
 
 		// If multiple keys are pressed then for the emulator we register
 		// the key which was pressed earliest.
 		// Therefore, if the same key is still pressed then maintain it.
-		if (pressed_key != C8_KEY_NONE && IsKeyUp(C8_KEY_MAP[pressed_key]))
+		if (pressed_key != C8_KEY_NONE && IsKeyUp(C8_KEY_MAP[pressed_key])) {
 			pressed_key = C8_KEY_NONE;
+		}
 
 		for (int i = 0; i < static_cast<int>(ARRAY_SIZE(keys_down)); ++i) {
 			keys_down[i] = IsKeyDown(C8_KEY_MAP[i]);
 
-			if (keys_down[i] && pressed_key == C8_KEY_NONE)
+			if (keys_down[i] && pressed_key == C8_KEY_NONE) {
 				pressed_key = i;
+			}
 		}
 
 		// Start drawing things
@@ -260,8 +267,9 @@ int main(int argc, char const **argv)
 
 		// Debug chip frequency(instructions per second), lower left corner.
 		auto hz_str = to_string(GetFPS() * instr_per_frame) + "Hz";
-		if (paused)
+		if (paused) {
 			hz_str = "PAUSED";
+		}
 		draw_padded_font(
 			hz_str.c_str(), {SCREEN_W - 120, SCREEN_H - 60}, RAYWHITE
 		);
@@ -269,13 +277,14 @@ int main(int argc, char const **argv)
 		// Draw decoded instructions
 		for (int i = -INSTR_DECODE_CONTEXT; i <= INSTR_DECODE_CONTEXT; ++i) {
 			string ins_str;
-			auto new_pc = static_cast<long>(emu.pc) + C8_INS_LEN * i;
+			auto new_pc = static_cast<std::int32_t>(emu.pc) + C8_INSTR_LEN * i;
 
 			// If at RAM boundary, then just print '~'
-			if (new_pc < 0 || new_pc + C8_INS_LEN > C8_RAM_SIZE)
+			if (new_pc < 0 || new_pc + C8_INSTR_LEN > C8_RAM_SIZE) {
 				ins_str = "~";
-			else
+			} else {
 				ins_str = DecodedIns(emu.fetch_ins(new_pc)).to_string();
+			}
 
 			Vector2 pos = get_rect_pos(INSTR_DEBUG_BOX);
 			pos.y += static_cast<float>(
@@ -308,10 +317,12 @@ int main(int argc, char const **argv)
 
 			auto [keycode, c8_key_name, key_name] = C8_KEY_NAME_MAP[i];
 			auto color = GRAY; // For keys not currently down.
-			if (keys_down[keycode])
+			if (keys_down[keycode]) {
 				color = MAROON; // For keys which are currently down.
-			if (pressed_key == keycode)
+			}
+			if (pressed_key == keycode) {
 				color = GOLD; // Key press which will be registered.
+			}
 
 			Rectangle border{pos.x, pos.y, KEY_BLOCK_SIZE, KEY_BLOCK_SIZE};
 			DrawRectangleLinesEx(border, 1., DARKGREEN);
@@ -330,8 +341,9 @@ int main(int argc, char const **argv)
 		// Draw the emulator screen
 		for (int y = 0; y < C8_SCREEN_HEIGHT; ++y) {
 			for (int x = 0; x < C8_SCREEN_WIDTH; ++x) {
-				if (!emu.screen[y][x])
+				if (!emu.screen[y][x]) {
 					continue;
+				}
 
 				auto sz = PIXEL_BLOCK_SIZE;
 				DrawRectangle(sz * x, sz * y, sz, sz, WHITE);
@@ -360,15 +372,15 @@ int main(int argc, char const **argv)
 		// Run code...
 		for (int i = 0; i < instr_per_frame; ++i) {
 			emu.key = static_cast<uint8_t>(pressed_key);
-			if (!emu.step())
-				clog << "Emulator: Illegal instruction!\n";
+			emu.step();
 		}
 
 		// Beep play/pause as per sound timer.
-		if (emu.sound_timer() > 0)
+		if (emu.sound_timer() > 0) {
 			PlayAudioStream(beep_stream);
-		else
+		} else {
 			PauseAudioStream(beep_stream);
+		}
 	}
 
 	// Cleanup

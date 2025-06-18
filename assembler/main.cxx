@@ -6,7 +6,7 @@
 
 #define LOG(...) (std::clog << std::format(__VA_ARGS__))
 
-int main(int argc, char const **argv)
+auto main(int argc, char const **argv) -> int
 {
 	if (argc != 3) {
 		auto name = argc > 0 ? argv[0] : "c8asm";
@@ -28,8 +28,9 @@ int main(int argc, char const **argv)
 
 	Parser parser(text);
 	auto bincode = parser.parse_and_assemble();
-	if (!bincode)
+	if (!bincode) {
 		return 1;
+	}
 
 	std::ofstream outfile(argv[2], std::ios::binary);
 	if (!outfile) {
