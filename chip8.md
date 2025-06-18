@@ -4,11 +4,11 @@ CHIP-8 Assembly
 Statement syntax (all fields are optional):  
 `[Label] [Instruction or Directive] [Comment]`
 
-Everything is **case-insesetive**.
+Instructions, directive and register names are **case-insesetive**.
 
 Label
 ---
-A label is an label-name followed by a colon(`:`), it must not be an instruction or a directive.  
+A label is an label-name followed by a colon(`:`), it must not be an instruction, directive or register name.  
 A label-name can contain alplanumeric characters and underscores(`_`), first character must not be a digit.  
 Like: `label_name:`
 
@@ -60,9 +60,14 @@ In place of address a label-name can be used.
 | 34  | `Fx55`   | `LD [I], Vx`         |
 | 35  | `Fx65`   | `LD Vx, [I]`         |
 
+A label can be used in place of an `addr` operand.
+
+Operand sizes: `addr`: 12 bits, `byte`: 8 bits, `nibble`: 4 bits.
+
 General purpose Registers: `V0`, `V1`, `V2`, `V3`, `V4`, `V5`, `V6`, `V7`, `V8`, `V9`,
 `VA`, `VB`, `VC`, `VD`, `VE`, `VF`  
 Special Purpose Registers: `PC`, `SP`, `I`, `DT`, `ST`
+
 
 __*__ : Branch Instructions  
 __^__ : Sets carry flag (`VF` register)
@@ -70,13 +75,14 @@ __^__ : Sets carry flag (`VF` register)
 Directives
 ---
 
-| Directive            | Function                                   |
-| -------------------- | ------------------------------------------ |
-| `db byte`            | Puts a byte at the current memory location |
-| `define alias subst` | Dumb Textual replacement(see below)        |
+| Directive             | Function                                   |
+| --------------------- | ------------------------------------------ |
+| `db byte`             | Puts a byte at the current memory location |
+| `%define alias subst` | Dumb Textual replacement(see below)        |
 
-For `define` directive `alias` should be an identifier and  
-`subst` is everything from after the alias till the end-of-line(newline not included).
+For `%define` directive `alias` can be any identifier like token and
+`subst` is everything from after the alias till the end-of-line
+(newline not included).
 
 First replacements are performed in a line for aliases defined by define directive,
 then that line is processed.
