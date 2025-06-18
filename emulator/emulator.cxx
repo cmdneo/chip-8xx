@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include <algorithm>
+#include <format>
 #include <bitset>
 #include <chrono>
 #include <random>
@@ -15,13 +16,14 @@ using std::chrono::steady_clock;
 static std::uniform_int_distribution<unsigned> random_byte_dist(0, 255);
 static std::random_device rand_device;
 
+#define LOG(...) (std::clog << std::format(__VA_ARGS__))
+
 Emulator::Emulator(const uint8_t *rom_beg, const uint8_t *rom_end)
 	: rand_gen(rand_device())
 {
 	constexpr auto rom_max = C8_RAM_SIZE - C8_PROG_START;
 	if (rom_end - rom_beg > rom_max) {
-		std::clog << "Emulator: ROM size too big! "
-				  << "Maximum is " << rom_max << " bytes\n";
+		LOG("Emulator: ROM size too big! Maximum is {} bytes\n", rom_max);
 		error = true;
 		return;
 	}
@@ -46,7 +48,7 @@ bool Emulator::step()
 
 	if (wait_for_key) {
 		if (key != C8_KEY_NONE) {
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 			regs[key_reg] = key;
 			wait_for_key = false;
 		} else {
@@ -82,23 +84,23 @@ bool Emulator::step()
 		break;
 
 	case I::CALL_a:
-		stack[sp++ % C8_STACK_SIZE] = pc + C8_INS_LEN;
+		stack[sp++ % C8_STACK_SIZE] = pc + C8_INSTR_LEN;
 		pc = ins.addr;
 		break;
 
 	case I::SE_v_b:
 		if (vvx == ins.byte)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::SNE_v_b:
 		if (vvx != ins.byte)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::SE_v_v:
 		if (vvx == vvy)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::LD_v_b:
@@ -150,7 +152,7 @@ bool Emulator::step()
 
 	case I::SNE_v_v:
 		if (vvx != vvy)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::LD_I_a:
@@ -171,12 +173,12 @@ bool Emulator::step()
 
 	case I::SKP_v:
 		if (key != C8_KEY_NONE && vvx == key)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::SKNP_v:
 		if (key == C8_KEY_NONE || vvx != key)
-			pc += C8_INS_LEN;
+			pc += C8_INSTR_LEN;
 		break;
 
 	case I::LD_v_DT:
@@ -205,7 +207,7 @@ bool Emulator::step()
 		break;
 
 	case I::LD_B_v:
-		// Instead of overflowing wrap around
+		// Instead of overflowing wrap around.
 		ram[(index + 0) % C8_RAM_SIZE] = vvx / 100;
 		ram[(index + 1) % C8_RAM_SIZE] = (vvx % 100) / 10;
 		ram[(index + 2) % C8_RAM_SIZE] = vvx % 10;
@@ -222,6 +224,7 @@ bool Emulator::step()
 		break;
 
 	case I::ILLEGAL:
+		LOG("Emulator: Illegal instruction {:04X}\n", bincode);
 		return false;
 	}
 
@@ -237,7 +240,7 @@ bool Emulator::step()
 		break;
 
 	default:
-		pc += C8_INS_LEN;
+		pc += C8_INSTR_LEN;
 		break;
 	}
 

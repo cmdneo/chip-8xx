@@ -16,14 +16,17 @@ class Emulator
 {
 public:
 	Emulator(const uint8_t *rom_beg, const uint8_t *rom_end);
-	explicit operator bool()const { return !error; }
+	explicit operator bool() const { return !error; }
 	bool step();
 	/// Resets the internal clock used for timers
 	void reset_clock() { last_time = std::chrono::steady_clock::now(); }
 
 	[[nodiscard]] uint8_t delay_timer() const { return std::lround(dtimer); }
 	[[nodiscard]] uint8_t sound_timer() const { return std::lround(stimer); }
-	[[nodiscard]] uint16_t fetch_ins(uint16_t n) const { return (ram[n] << 8) | ram[n + 1]; }
+	[[nodiscard]] uint16_t fetch_ins(uint16_t n) const
+	{
+		return (ram[n % C8_RAM_SIZE] << 8) | ram[(n + 1) % C8_RAM_SIZE];
+	}
 
 	// Direct access is needed for displaying info
 	uint16_t pc = C8_PROG_START;
@@ -50,4 +53,3 @@ private:
 	/// Add and set the overflow flag if unsigned overflow occurs
 	uint8_t add_with_ovf(uint8_t a, uint8_t b);
 };
-

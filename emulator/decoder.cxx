@@ -142,21 +142,11 @@ DecodedIns::DecodedIns(uint16_t ins)
 	}
 }
 
-/// @brief Instruction format string
-static const string INSTRUCTION_FMT[] = {
-	"CLS",      "RET",      "SYS a",    "JP a",      "CALL a",    "SE x, b",
-	"SNE x, b", "SE x, y",  "LD x, b",  "ADD x, b",  "LD x, y",   "OR x, y",
-	"AND x, y", "XOR x, y", "ADD x, y", "SUB x, y",  "SHR x",     "SUBN x, y",
-	"SHL x",    "SNE x, y", "LD I, a",  "JP V0,a",   "RND x, b",  "DRW x, y, n",
-	"SKP x",    "SKNP x",   "LD x, DT", "LD x, K",   "LD DT, x",  "LD ST, x",
-	"ADD I, x", "LD F, x",  "LD B, x",  "LD [I], x", "LD x, [I]",
-};
-
-// Replaces once
-static void replace_char(string &s, char old, string_view new_)
+/// Replaces the first occuring char.
+static void replace_char(string &s, char old, string_view replacement)
 {
 	if (auto at = s.find(old); at != string::npos) {
-		s.replace(at, 1, new_);
+		s.replace(at, 1, replacement);
 	}
 }
 
@@ -165,11 +155,11 @@ string DecodedIns::to_string() const
 	if (type == Instruction::ILLEGAL)
 		return "<! DECODING ERROR !>";
 
-	string ret = INSTRUCTION_FMT[static_cast<int>(type)];
+	auto ret = string(INSTRUCTION_FORMATS[static_cast<int>(type)]);
 	replace_char(ret, 'a', std::to_string(addr));
 	replace_char(ret, 'b', std::to_string(byte));
 	replace_char(ret, 'n', std::to_string(nibble));
-	replace_char(ret, 'x', REGISTERS[static_cast<int>(vx)]);
-	replace_char(ret, 'y', REGISTERS[static_cast<int>(vy)]);
+	replace_char(ret, 'v', REGISTERS[static_cast<int>(vx)]);
+	replace_char(ret, 'v', REGISTERS[static_cast<int>(vy)]);
 	return ret;
 }
