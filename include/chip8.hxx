@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 #include <string_view>
 
 int constexpr C8_SCREEN_WIDTH = 64;
@@ -131,10 +130,4 @@ constexpr std::uint16_t OPCODES[] = {
 	0x7000, 0x8000, 0x8001, 0x8002, 0x8003, 0x8004, 0x8005, 0x8006, 0x8007,
 	0x800E, 0x9000, 0xA000, 0xB000, 0xC000, 0xD000, 0xE09E, 0xE0A1, 0xF007,
 	0xF00A, 0xF015, 0xF018, 0xF01E, 0xF029, 0xF033, 0xF055, 0xF065,
-};
-
-/// @brief Directive mnemonics, ordered according to Directive enum
-constexpr std::string_view DIRECTIVES[] = {
-	"DB",
-	"DEFINE",
 };

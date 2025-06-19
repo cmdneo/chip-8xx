@@ -12,8 +12,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 include_directories("${CMAKE_SOURCE_DIR}/include")
 
 add_executable(c8emu
-    "emulator/emulator.cxx"
     "emulator/decoder.cxx"
+    "emulator/emulator.cxx"
+    "emulator/emulator_ui.cxx"
     "emulator/main.cxx"
 )
 target_link_libraries(c8emu raylib m)
